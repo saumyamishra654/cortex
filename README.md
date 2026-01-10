@@ -15,18 +15,6 @@ A personal knowledge collection app with spaced repetition and knowledge graph f
 
 [https://saumyamishra654.github.io/cortex/](https://saumyamishra654.github.io/cortex/)
 
-## Development
-
-```bash
-flutter run -d chrome
-```
-
-## Build for Web
-
-```bash
-flutter build web --release --base-href "/cortex/"
-```
-
 ## Tech Stack
 
 - Flutter
