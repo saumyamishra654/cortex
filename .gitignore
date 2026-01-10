@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+*.g.dart
+*.freezed.dart
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+
+# Environment
+.env
+.env.*
+
+# Secrets
+secrets.dart
+**/secrets/

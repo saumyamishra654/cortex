@@ -1,0 +1,279 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/fact.dart';
+import '../models/fact_link.dart';
+import '../providers/data_provider.dart';
+import '../services/graph_service.dart';
+import '../services/embedding_service.dart';
+import '../widgets/knowledge_graph.dart';
+import 'fact_detail_screen.dart';
+
+class GraphScreen extends StatefulWidget {
+  const GraphScreen({super.key});
+
+  @override
+  State<GraphScreen> createState() => _GraphScreenState();
+}
+
+class _GraphScreenState extends State<GraphScreen> {
+  bool _showSemanticEdges = true;
+  String? _filterSourceId;
+  String? _filterSubject;
+  
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Knowledge Graph'),
+        actions: [
+          IconButton(
+            icon: Icon(
+              _showSemanticEdges 
+                  ? Icons.link_rounded 
+                  : Icons.link_off_rounded,
+            ),
+            tooltip: _showSemanticEdges 
+                ? 'Hide semantic connections' 
+                : 'Show semantic connections',
+            onPressed: () {
+              setState(() {
+                _showSemanticEdges = !_showSemanticEdges;
+              });
+            },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.filter_list_rounded),
+            tooltip: 'Filter',
+            onSelected: (value) {
+              if (value == 'clear') {
+                setState(() {
+                  _filterSourceId = null;
+                  _filterSubject = null;
+                });
+              }
+            },
+            itemBuilder: (context) {
+              final provider = context.read<DataProvider>();
+              return [
+                const PopupMenuItem(
+                  value: 'clear',
+                  child: Row(
+                    children: [
+                      Icon(Icons.clear_all_rounded),
+                      SizedBox(width: 12),
+                      Text('Clear Filters'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                ...provider.sources.map((source) => PopupMenuItem(
+                  value: 'source_${source.id}',
+                  child: Text(source.name),
+                  onTap: () {
+                    setState(() {
+                      _filterSourceId = source.id;
+                    });
+                  },
+                )),
+              ];
+            },
+          ),
+        ],
+      ),
+      body: Consumer<DataProvider>(
+        builder: (context, provider, child) {
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          
+          if (provider.facts.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.hub_rounded,
+                    size: 80,
+                    color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'No facts yet',
+                    style: theme.textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add facts to build your knowledge graph',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            );
+          }
+          
+          // Filter facts
+          var facts = provider.facts;
+          if (_filterSourceId != null) {
+            facts = facts.where((f) => f.sourceId == _filterSourceId).toList();
+          }
+          if (_filterSubject != null) {
+            facts = facts.where((f) => f.subjects.contains(_filterSubject)).toList();
+          }
+          
+          // Build graph data
+          final graphService = GraphService(EmbeddingService());
+          final links = <FactLink>[]; // TODO: Get from provider
+          final graphData = graphService.buildGraph(
+            facts, 
+            links,
+            includeSemanticEdges: _showSemanticEdges,
+          );
+          
+          final sources = {
+            for (final s in provider.sources) s.id: s
+          };
+          
+          return Column(
+            children: [
+              // Stats bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: theme.colorScheme.surface,
+                child: Row(
+                  children: [
+                    _StatChip(
+                      icon: Icons.circle,
+                      label: '${graphData.nodes.length} facts',
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 12),
+                    _StatChip(
+                      icon: Icons.link,
+                      label: '${graphData.edges.where((e) => e.type == EdgeType.manual).length} links',
+                      color: theme.colorScheme.secondary,
+                    ),
+                    if (_showSemanticEdges) ...[
+                      const SizedBox(width: 12),
+                      _StatChip(
+                        icon: Icons.hub,
+                        label: '${graphData.edges.where((e) => e.type == EdgeType.semantic).length} semantic',
+                        color: theme.colorScheme.tertiary,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              
+              // Graph
+              Expanded(
+                child: KnowledgeGraph(
+                  graphData: graphData,
+                  sources: sources,
+                  onNodeTap: (fact) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FactDetailScreen(fact: fact),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              
+              // Legend
+              Container(
+                padding: const EdgeInsets.all(12),
+                color: theme.colorScheme.surface,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _LegendItem(
+                      color: theme.colorScheme.primary,
+                      label: 'Manual link',
+                      isSolid: true,
+                    ),
+                    const SizedBox(width: 24),
+                    _LegendItem(
+                      color: theme.colorScheme.secondary,
+                      label: 'Semantic similarity',
+                      isSolid: false,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _StatChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+  final bool isSolid;
+
+  const _LegendItem({
+    required this.color,
+    required this.label,
+    required this.isSolid,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 20,
+          height: 2,
+          decoration: BoxDecoration(
+            color: isSolid ? color : Colors.transparent,
+            border: isSolid ? null : Border(
+              bottom: BorderSide(
+                color: color,
+                width: 1,
+                style: BorderStyle.solid,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+}
