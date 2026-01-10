@@ -4,12 +4,12 @@ A personal knowledge collection app with spaced repetition and knowledge graph f
 
 ## Features
 
-- 📚 Source Management (books, podcasts, articles)
-- 📝 Fact Capture with subject tags
-- 🧠 Spaced Repetition (SM-2 algorithm)
-- 🕸️ Knowledge Graph visualization
-- 📁 Smart Collections
-- 🌙 Dark/Light themes
+- Source Management (books, podcasts, articles)
+- Fact Capture with subject tags
+- Spaced Repetition (SM-2 algorithm)
+- Knowledge Graph visualization
+- Smart Collections
+- Dark/Light themes
 
 ## Live Demo
 
