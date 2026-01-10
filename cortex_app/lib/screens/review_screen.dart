@@ -18,9 +18,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   final SrsService _srsService = SrsService();
   List<Fact> _facts = [];
   int _currentIndex = 0;
-  ReviewMode _mode = ReviewMode.srs;
-  bool _isComplete = false;
-  String? _selectedTag; // null = all tags
+  ReviewMode _mode = ReviewMode.shuffle; // Default to shuffle so cards always show
+  String? _selectedTag;
 
   @override
   void initState() {
@@ -34,6 +33,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
       List<Fact> facts;
       if (_mode == ReviewMode.srs) {
         facts = provider.dueFactsShuffled;
+        // If no SRS cards, fall back to shuffle mode
+        if (facts.isEmpty) {
+          facts = provider.allFactsShuffled;
+        }
       } else {
         facts = provider.allFactsShuffled;
       }
@@ -45,7 +48,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
       
       _facts = facts;
       _currentIndex = 0;
-      _isComplete = _facts.isEmpty;
     });
   }
 
@@ -92,7 +94,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   ],
                 ),
               ),
-              const PopupMenuDivider(),
+              if (allTags.isNotEmpty) const PopupMenuDivider(),
               ...allTags.map((tag) => PopupMenuItem(
                 value: tag,
                 child: Row(
@@ -179,63 +181,74 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Widget _buildBody(DataProvider provider) {
     final theme = Theme.of(context);
     
-    if (_isComplete || _facts.isEmpty) {
+    // No facts at all in the app
+    if (provider.facts.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              _mode == ReviewMode.srs 
-                  ? Icons.celebration_rounded 
-                  : Icons.check_circle_rounded,
+              Icons.note_add_rounded,
               size: 80,
-              color: theme.colorScheme.primary,
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 24),
             Text(
-              _mode == ReviewMode.srs 
-                  ? 'All caught up!' 
-                  : 'Review complete!',
+              'No facts yet',
               style: theme.textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
             Text(
-              _selectedTag != null
-                  ? 'No "$_selectedTag" cards ${_mode == ReviewMode.srs ? "due" : "left"}'
-                  : (_mode == ReviewMode.srs
-                      ? 'No cards due for review'
-                      : 'You\'ve gone through all cards'),
+              'Add some facts to start reviewing',
               style: theme.textTheme.bodyMedium,
             ),
-            const SizedBox(height: 32),
-            if (_selectedTag != null)
-              ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _selectedTag = null;
-                  });
-                  _loadFacts();
-                },
-                icon: const Icon(Icons.label_off_rounded),
-                label: const Text('Show All Tags'),
-              )
-            else
-              ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _mode = ReviewMode.shuffle;
-                  });
-                  _loadFacts();
-                },
-                icon: const Icon(Icons.shuffle_rounded),
-                label: const Text('Shuffle All Cards'),
-              ),
           ],
         ),
       );
     }
-
-    final fact = _facts[_currentIndex];
+    
+    // No facts match current filter
+    if (_facts.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.filter_alt_off_rounded,
+              size: 80,
+              color: theme.colorScheme.primary.withValues(alpha: 0.5),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'No matching facts',
+              style: theme.textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _selectedTag != null 
+                  ? 'No facts tagged "$_selectedTag"'
+                  : 'Try a different filter',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _selectedTag = null;
+                });
+                _loadFacts();
+              },
+              icon: const Icon(Icons.clear_rounded),
+              label: const Text('Clear Filter'),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Loop back to start when reaching end
+    final effectiveIndex = _currentIndex % _facts.length;
+    final fact = _facts[effectiveIndex];
     final source = provider.sources.firstWhere(
       (s) => s.id == fact.sourceId,
       orElse: () => provider.sources.first,
@@ -244,7 +257,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     return Flashcard(
       fact: fact,
       sourceName: source.name,
-      currentIndex: _currentIndex,
+      currentIndex: effectiveIndex,
       totalCount: _facts.length,
       onForgot: () => _handleReview(SrsService.qualityForgot),
       onSkip: () => _nextCard(),
@@ -253,9 +266,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   void _handleReview(int quality) async {
-    if (_currentIndex >= _facts.length) return;
-    
-    final fact = _facts[_currentIndex];
+    final effectiveIndex = _currentIndex % _facts.length;
+    final fact = _facts[effectiveIndex];
     final updatedFact = _srsService.processReview(fact, quality);
     
     await context.read<DataProvider>().updateFact(updatedFact);
@@ -265,11 +277,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   void _nextCard() {
     setState(() {
-      if (_currentIndex < _facts.length - 1) {
-        _currentIndex++;
-      } else {
-        _isComplete = true;
-      }
+      _currentIndex++;
     });
   }
 }

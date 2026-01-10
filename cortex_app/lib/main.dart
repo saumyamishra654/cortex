@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'providers/data_provider.dart';
 import 'services/storage_service.dart';
+import 'services/supabase_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/review_screen.dart';
 import 'screens/graph_screen.dart';
 import 'screens/collections_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/auth_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize storage
+  // Initialize Supabase
+  await SupabaseService.init();
+  
+  // Initialize local storage
   final storage = HiveStorageService();
   await storage.init();
   
@@ -33,6 +39,41 @@ class CortexApp extends StatefulWidget {
 
 class _CortexAppState extends State<CortexApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  bool _showAuth = true;
+  bool _isCheckingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthState();
+    
+    // Listen to auth changes
+    SupabaseService.authStateChanges.listen((state) {
+      if (state.event == AuthChangeEvent.signedIn) {
+        setState(() => _showAuth = false);
+        _syncFromCloud();
+      } else if (state.event == AuthChangeEvent.signedOut) {
+        setState(() => _showAuth = true);
+      }
+    });
+  }
+
+  void _checkAuthState() {
+    setState(() {
+      _showAuth = !SupabaseService.isSignedIn;
+      _isCheckingAuth = false;
+    });
+    
+    // If signed in, sync from cloud
+    if (SupabaseService.isSignedIn) {
+      _syncFromCloud();
+    }
+  }
+
+  Future<void> _syncFromCloud() async {
+    // TODO: Implement full sync - for now just log
+    debugPrint('User signed in: ${SupabaseService.currentUser?.email}');
+  }
 
   void _toggleTheme() {
     setState(() {
@@ -54,10 +95,18 @@ class _CortexAppState extends State<CortexApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
-      home: MainNavigation(
-        isDarkMode: _isDarkMode,
-        onToggleTheme: _toggleTheme,
-      ),
+      home: _isCheckingAuth
+          ? const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            )
+          : _showAuth
+              ? AuthScreen(
+                  onSignedIn: () => setState(() => _showAuth = false),
+                )
+              : MainNavigation(
+                  isDarkMode: _isDarkMode,
+                  onToggleTheme: _toggleTheme,
+                ),
     );
   }
 }

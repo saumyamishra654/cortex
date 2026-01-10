@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/data_provider.dart';
 import '../services/secure_storage_service.dart';
+import '../services/supabase_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -49,6 +50,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = context.watch<DataProvider>();
+    final user = SupabaseService.currentUser;
+    final isSignedIn = SupabaseService.isSignedIn;
 
     return Scaffold(
       appBar: AppBar(
@@ -56,6 +59,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         children: [
+          // Account Section
+          _SectionHeader(title: 'Account'),
+          if (isSignedIn) ...[
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: theme.colorScheme.primary,
+                child: Text(
+                  (user?.email?.substring(0, 1) ?? 'U').toUpperCase(),
+                  style: TextStyle(color: theme.colorScheme.onPrimary),
+                ),
+              ),
+              title: Text(user?.email ?? 'Signed In'),
+              subtitle: const Text('Syncing to cloud'),
+              trailing: TextButton(
+                onPressed: _signOut,
+                child: const Text('Sign Out'),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.sync_rounded),
+              title: const Text('Sync Now'),
+              subtitle: const Text('Upload local data to cloud'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => _syncToCloud(provider),
+            ),
+          ] else ...[
+            ListTile(
+              leading: const Icon(Icons.cloud_off_rounded),
+              title: const Text('Not signed in'),
+              subtitle: const Text('Using local storage only'),
+            ),
+          ],
+          const Divider(),
+          
           // Appearance Section
           _SectionHeader(title: 'Appearance'),
           ListTile(
@@ -137,7 +174,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         controller: _apiKeyController,
                         obscureText: !_isApiKeyVisible,
                         decoration: InputDecoration(
-                          hintText: _hasApiKey ? '••••••••••••' : 'sk-...',
+                          hintText: _hasApiKey ? '************' : 'sk-...',
                           isDense: true,
                           suffixIcon: IconButton(
                             icon: Icon(
@@ -175,35 +212,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.security_rounded,
-                    size: 20,
-                    color: theme.colorScheme.secondary,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'API key is stored in your device\'s secure storage (Keychain on iOS/macOS, encrypted storage on Android).',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           const Divider(height: 32),
 
           // Statistics Section
@@ -234,23 +242,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(height: 32),
 
-          // Account Section (placeholder for future)
-          _SectionHeader(title: 'Account'),
-          ListTile(
-            leading: const Icon(Icons.login_rounded),
-            title: const Text('Sign In'),
-            subtitle: const Text('Sync your data across devices'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Sign in coming soon!'),
-                ),
-              );
-            },
-          ),
-          const Divider(height: 32),
-
           // About Section
           _SectionHeader(title: 'About'),
           ListTile(
@@ -262,6 +253,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _signOut() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign Out?'),
+        content: const Text(
+          'Your local data will remain on this device.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed == true) {
+      await SupabaseService.signOut();
+    }
+  }
+
+  Future<void> _syncToCloud(DataProvider provider) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Syncing...')),
+    );
+    
+    try {
+      await SupabaseService.syncToCloud(provider.sources, provider.facts);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sync complete!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Sync failed: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _saveApiKey() async {
