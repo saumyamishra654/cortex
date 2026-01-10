@@ -20,6 +20,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   int _currentIndex = 0;
   ReviewMode _mode = ReviewMode.srs;
   bool _isComplete = false;
+  String? _selectedTag; // null = all tags
 
   @override
   void initState() {
@@ -30,11 +31,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
   void _loadFacts() {
     final provider = context.read<DataProvider>();
     setState(() {
+      List<Fact> facts;
       if (_mode == ReviewMode.srs) {
-        _facts = provider.dueFactsShuffled;
+        facts = provider.dueFactsShuffled;
       } else {
-        _facts = provider.allFactsShuffled;
+        facts = provider.allFactsShuffled;
       }
+      
+      // Filter by tag if selected
+      if (_selectedTag != null) {
+        facts = facts.where((f) => f.subjects.contains(_selectedTag)).toList();
+      }
+      
+      _facts = facts;
       _currentIndex = 0;
       _isComplete = _facts.isEmpty;
     });
@@ -44,11 +53,68 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = context.watch<DataProvider>();
+    final allTags = provider.allSubjects;
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Review'),
+        title: Text(_selectedTag != null ? 'Review: $_selectedTag' : 'Review'),
         actions: [
+          // Tag filter
+          PopupMenuButton<String?>(
+            icon: Badge(
+              isLabelVisible: _selectedTag != null,
+              child: const Icon(Icons.label_rounded),
+            ),
+            tooltip: 'Filter by Tag',
+            onSelected: (tag) {
+              setState(() {
+                _selectedTag = tag;
+              });
+              _loadFacts();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: null,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.label_off_rounded,
+                      color: _selectedTag == null 
+                          ? theme.colorScheme.primary 
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('All Tags'),
+                    if (_selectedTag == null) ...[
+                      const Spacer(),
+                      Icon(Icons.check, color: theme.colorScheme.primary),
+                    ],
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              ...allTags.map((tag) => PopupMenuItem(
+                value: tag,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.label_rounded,
+                      color: _selectedTag == tag 
+                          ? theme.colorScheme.primary 
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(tag),
+                    if (_selectedTag == tag) ...[
+                      const Spacer(),
+                      Icon(Icons.check, color: theme.colorScheme.primary),
+                    ],
+                  ],
+                ),
+              )),
+            ],
+          ),
+          // Mode selector
           PopupMenuButton<ReviewMode>(
             icon: const Icon(Icons.tune_rounded),
             tooltip: 'Review Mode',
@@ -134,22 +200,36 @@ class _ReviewScreenState extends State<ReviewScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _mode == ReviewMode.srs
-                  ? 'No cards due for review'
-                  : 'You\'ve gone through all cards',
+              _selectedTag != null
+                  ? 'No "$_selectedTag" cards ${_mode == ReviewMode.srs ? "due" : "left"}'
+                  : (_mode == ReviewMode.srs
+                      ? 'No cards due for review'
+                      : 'You\'ve gone through all cards'),
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _mode = ReviewMode.shuffle;
-                });
-                _loadFacts();
-              },
-              icon: const Icon(Icons.shuffle_rounded),
-              label: const Text('Shuffle All Cards'),
-            ),
+            if (_selectedTag != null)
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _selectedTag = null;
+                  });
+                  _loadFacts();
+                },
+                icon: const Icon(Icons.label_off_rounded),
+                label: const Text('Show All Tags'),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _mode = ReviewMode.shuffle;
+                  });
+                  _loadFacts();
+                },
+                icon: const Icon(Icons.shuffle_rounded),
+                label: const Text('Shuffle All Cards'),
+              ),
           ],
         ),
       );
