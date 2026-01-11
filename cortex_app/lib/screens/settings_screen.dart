@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/data_provider.dart';
 import '../services/secure_storage_service.dart';
-import '../services/supabase_service.dart';
+import '../services/firebase_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -50,8 +50,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = context.watch<DataProvider>();
-    final user = SupabaseService.currentUser;
-    final isSignedIn = SupabaseService.isSignedIn;
+    final user = FirebaseService.currentUser;
+    final isSignedIn = FirebaseService.isSignedIn;
 
     return Scaffold(
       appBar: AppBar(
@@ -277,7 +277,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     
     if (confirmed == true) {
-      await SupabaseService.signOut();
+      await FirebaseService.signOut();
     }
   }
 
@@ -287,7 +287,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     
     try {
-      await SupabaseService.syncToCloud(provider.sources, provider.facts);
+      await FirebaseService.syncToCloud(provider.sources, provider.facts);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Sync complete!')),

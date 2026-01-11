@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/supabase_service.dart';
+import '../services/firebase_service.dart';
 
 class AuthScreen extends StatefulWidget {
   final VoidCallback onSignedIn;
@@ -109,14 +109,21 @@ class _AuthScreenState extends State<AuthScreen> {
     });
     
     try {
-      await SupabaseService.signInWithGoogle();
-      // The OAuth redirect will handle the rest
-      // After redirect, the app will detect the auth state change
+      final result = await FirebaseService.signInWithGoogle();
+      if (result != null && mounted) {
+        widget.onSignedIn();
+      } else if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = 'Sign in failed. Please try again.';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Sign in failed. Please try again.';
+          _isLoading = false;
+        });
+      }
     }
   }
 }

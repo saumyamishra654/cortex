@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'providers/data_provider.dart';
 import 'services/storage_service.dart';
-import 'services/supabase_service.dart';
+import 'services/firebase_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/review_screen.dart';
@@ -15,8 +15,8 @@ import 'screens/auth_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Supabase
-  await SupabaseService.init();
+  // Initialize Firebase
+  await FirebaseService.init();
   
   // Initialize local storage
   final storage = HiveStorageService();
@@ -48,11 +48,11 @@ class _CortexAppState extends State<CortexApp> {
     _checkAuthState();
     
     // Listen to auth changes
-    SupabaseService.authStateChanges.listen((state) {
-      if (state.event == AuthChangeEvent.signedIn) {
+    FirebaseService.authStateChanges.listen((user) {
+      if (user != null) {
         setState(() => _showAuth = false);
         _syncFromCloud();
-      } else if (state.event == AuthChangeEvent.signedOut) {
+      } else {
         setState(() => _showAuth = true);
       }
     });
@@ -60,19 +60,19 @@ class _CortexAppState extends State<CortexApp> {
 
   void _checkAuthState() {
     setState(() {
-      _showAuth = !SupabaseService.isSignedIn;
+      _showAuth = !FirebaseService.isSignedIn;
       _isCheckingAuth = false;
     });
     
     // If signed in, sync from cloud
-    if (SupabaseService.isSignedIn) {
+    if (FirebaseService.isSignedIn) {
       _syncFromCloud();
     }
   }
 
   Future<void> _syncFromCloud() async {
     // TODO: Implement full sync - for now just log
-    debugPrint('User signed in: ${SupabaseService.currentUser?.email}');
+    debugPrint('User signed in: ${FirebaseService.currentUser?.email}');
   }
 
   void _toggleTheme() {

@@ -33,8 +33,11 @@ dependencies:
   # Secure storage for API keys
   flutter_secure_storage: ^9.2.2
   
-  # Phase 3: Supabase Backend
-  supabase_flutter: ^2.3.0
+  # Phase 3: Firebase Backend
+  firebase_core: ^3.8.1
+  firebase_auth: ^5.3.4
+  cloud_firestore: ^5.6.0
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:
