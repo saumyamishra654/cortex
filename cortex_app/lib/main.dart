@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'providers/data_provider.dart';
 import 'services/storage_service.dart';
 import 'services/firebase_service.dart';
@@ -14,14 +13,14 @@ import 'screens/auth_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
   await FirebaseService.init();
-  
+
   // Initialize local storage
   final storage = HiveStorageService();
   await storage.init();
-  
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => DataProvider(storage)..init(),
@@ -46,14 +45,20 @@ class _CortexAppState extends State<CortexApp> {
   void initState() {
     super.initState();
     _checkAuthState();
-    
+
     // Listen to auth changes
     FirebaseService.authStateChanges.listen((user) {
       if (user != null) {
         setState(() => _showAuth = false);
-        _syncFromCloud();
+        // Use post-frame callback to access context safely
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _onUserSignedIn();
+        });
       } else {
         setState(() => _showAuth = true);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _onUserSignedOut();
+        });
       }
     });
   }
@@ -63,16 +68,34 @@ class _CortexAppState extends State<CortexApp> {
       _showAuth = !FirebaseService.isSignedIn;
       _isCheckingAuth = false;
     });
-    
-    // If signed in, sync from cloud
+
+    // If signed in, start listening to Firebase (use post-frame callback)
     if (FirebaseService.isSignedIn) {
-      _syncFromCloud();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _onUserSignedIn();
+      });
     }
   }
 
-  Future<void> _syncFromCloud() async {
-    // TODO: Implement full sync - for now just log
+  void _onUserSignedIn() {
     debugPrint('User signed in: ${FirebaseService.currentUser?.email}');
+    debugPrint('User ID: ${FirebaseService.userId}');
+
+    // Start Firebase real-time listeners in DataProvider
+    if (mounted) {
+      final dataProvider = Provider.of<DataProvider>(context, listen: false);
+      dataProvider.startFirebaseListeners();
+    }
+  }
+
+  void _onUserSignedOut() {
+    debugPrint('User signed out');
+
+    // Stop Firebase listeners
+    if (mounted) {
+      final dataProvider = Provider.of<DataProvider>(context, listen: false);
+      dataProvider.stopFirebaseListeners();
+    }
   }
 
   void _toggleTheme() {
@@ -96,17 +119,13 @@ class _CortexAppState extends State<CortexApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
       home: _isCheckingAuth
-          ? const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            )
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : _showAuth
-              ? AuthScreen(
-                  onSignedIn: () => setState(() => _showAuth = false),
-                )
-              : MainNavigation(
-                  isDarkMode: _isDarkMode,
-                  onToggleTheme: _toggleTheme,
-                ),
+          ? AuthScreen(onSignedIn: () => setState(() => _showAuth = false))
+          : MainNavigation(
+              isDarkMode: _isDarkMode,
+              onToggleTheme: _toggleTheme,
+            ),
     );
   }
 }
@@ -114,7 +133,7 @@ class _CortexAppState extends State<CortexApp> {
 class MainNavigation extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback onToggleTheme;
-  
+
   const MainNavigation({
     super.key,
     required this.isDarkMode,

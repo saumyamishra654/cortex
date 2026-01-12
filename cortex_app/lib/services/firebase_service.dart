@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/source.dart' as models;
 import '../models/fact.dart';
@@ -286,14 +286,27 @@ class FirebaseService {
 
   /// Real-time listener for sources
   static Stream<List<models.Source>> sourcesStream() {
-    if (!isSignedIn) return Stream.value([]);
+    if (!isSignedIn) {
+      debugPrint('[FirebaseService] sourcesStream: User not signed in');
+      return Stream.value([]);
+    }
+
+    debugPrint(
+      '[FirebaseService] sourcesStream: Listening to sources for user $userId',
+    );
 
     return _sourcesCollection
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs.map((doc) {
+        .map((snapshot) {
+          debugPrint(
+            '[FirebaseService] sourcesStream: Received ${snapshot.docs.length} documents',
+          );
+          return snapshot.docs.map((doc) {
             final data = doc.data();
+            debugPrint(
+              '[FirebaseService] Source doc: ${doc.id} - ${data['name']}',
+            );
             return models.Source(
               id: doc.id,
               name: data['name'],
@@ -305,37 +318,51 @@ class FirebaseService {
               updatedAt: (data['updatedAt'] as Timestamp).toDate(),
             );
             // Note: metadata field is ignored in Flutter app's Source model
-          }).toList(),
-        );
+          }).toList();
+        });
   }
 
   /// Real-time listener for facts
   static Stream<List<Fact>> factsStream() {
-    if (!isSignedIn) return Stream.value([]);
+    if (!isSignedIn) {
+      debugPrint('[FirebaseService] factsStream: User not signed in');
+      return Stream.value([]);
+    }
 
-    return _factsCollection
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs.map((doc) {
-            final data = doc.data();
-            return Fact(
-              id: doc.id,
-              content: data['content'] ?? '',
-              sourceId: data['sourceId'] ?? '',
-              subjects: List<String>.from(data['subjects'] ?? []),
-              imageUrl: data['imageUrl'],
-              ocrText: data['ocrText'],
-              repetitions: data['repetitions'] ?? 0,
-              easeFactor: (data['easeFactor'] ?? 2.5).toDouble(),
-              interval: data['interval'] ?? 0,
-              nextReviewAt: data['nextReviewAt'] != null
-                  ? (data['nextReviewAt'] as Timestamp).toDate()
-                  : null,
-              createdAt: (data['createdAt'] as Timestamp).toDate(),
-              updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-            );
-          }).toList(),
+    debugPrint(
+      '[FirebaseService] factsStream: Listening to facts for user $userId',
+    );
+
+    return _factsCollection.orderBy('createdAt', descending: true).snapshots().map((
+      snapshot,
+    ) {
+      debugPrint(
+        '[FirebaseService] factsStream: Received ${snapshot.docs.length} documents',
+      );
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        final content = data['content']?.toString() ?? '';
+        final preview = content.length > 50
+            ? content.substring(0, 50)
+            : content;
+        debugPrint('[FirebaseService] Fact doc: ${doc.id} - $preview...');
+        return Fact(
+          id: doc.id,
+          content: data['content'] ?? '',
+          sourceId: data['sourceId'] ?? '',
+          subjects: List<String>.from(data['subjects'] ?? []),
+          imageUrl: data['imageUrl'],
+          ocrText: data['ocrText'],
+          repetitions: data['repetitions'] ?? 0,
+          easeFactor: (data['easeFactor'] ?? 2.5).toDouble(),
+          interval: data['interval'] ?? 0,
+          nextReviewAt: data['nextReviewAt'] != null
+              ? (data['nextReviewAt'] as Timestamp).toDate()
+              : null,
+          createdAt: (data['createdAt'] as Timestamp).toDate(),
+          updatedAt: (data['updatedAt'] as Timestamp).toDate(),
         );
+      }).toList();
+    });
   }
 }

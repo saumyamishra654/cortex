@@ -35,7 +35,7 @@ class DataProvider extends ChangeNotifier {
 
     // Start listening to Firebase real-time updates if signed in
     if (FirebaseService.isSignedIn) {
-      _startFirebaseListeners();
+      startFirebaseListeners();
     }
 
     _isLoading = false;
@@ -43,13 +43,23 @@ class DataProvider extends ChangeNotifier {
   }
 
   /// Start Firebase real-time listeners
-  void _startFirebaseListeners() {
+  void startFirebaseListeners() {
+    if (!FirebaseService.isSignedIn) {
+      debugPrint('Cannot start Firebase listeners: User not signed in');
+      return;
+    }
+
+    debugPrint(
+      'Starting Firebase listeners for user: ${FirebaseService.userId}',
+    );
+
     _sourcesSubscription?.cancel();
     _factsSubscription?.cancel();
 
     // Listen to sources from Firebase
     _sourcesSubscription = FirebaseService.sourcesStream().listen(
       (firebaseSources) {
+        debugPrint('Received ${firebaseSources.length} sources from Firebase');
         _mergeSources(firebaseSources);
       },
       onError: (error) {
@@ -60,6 +70,7 @@ class DataProvider extends ChangeNotifier {
     // Listen to facts from Firebase
     _factsSubscription = FirebaseService.factsStream().listen(
       (firebaseFacts) {
+        debugPrint('Received ${firebaseFacts.length} facts from Firebase');
         _mergeFacts(firebaseFacts);
       },
       onError: (error) {
