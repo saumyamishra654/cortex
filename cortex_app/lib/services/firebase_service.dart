@@ -85,33 +85,47 @@ class FirebaseService {
   static Future<List<Map<String, dynamic>>> getSources() async {
     if (!isSignedIn) return [];
 
-    final snapshot =
-        await _sourcesCollection.orderBy('createdAt', descending: true).get();
+    final snapshot = await _sourcesCollection
+        .orderBy('createdAt', descending: true)
+        .get();
 
     return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
   }
 
   /// Create a source
-  static Future<void> createSource(models.Source source) async {
+  static Future<void> createSource(
+    models.Source source, {
+    Map<String, dynamic>? metadata,
+  }) async {
     if (!isSignedIn) return;
 
     await _sourcesCollection.doc(source.id).set({
       'name': source.name,
       'type': source.type.name,
+      'metadata': metadata ?? {},
       'createdAt': Timestamp.fromDate(source.createdAt),
       'updatedAt': Timestamp.fromDate(source.updatedAt),
     });
   }
 
   /// Update a source
-  static Future<void> updateSource(models.Source source) async {
+  static Future<void> updateSource(
+    models.Source source, {
+    Map<String, dynamic>? metadata,
+  }) async {
     if (!isSignedIn) return;
 
-    await _sourcesCollection.doc(source.id).update({
+    final updateData = {
       'name': source.name,
       'type': source.type.name,
       'updatedAt': Timestamp.now(),
-    });
+    };
+
+    if (metadata != null) {
+      updateData['metadata'] = metadata;
+    }
+
+    await _sourcesCollection.doc(source.id).update(updateData);
   }
 
   /// Delete a source
@@ -127,8 +141,9 @@ class FirebaseService {
   static Future<List<Map<String, dynamic>>> getFacts() async {
     if (!isSignedIn) return [];
 
-    final snapshot =
-        await _factsCollection.orderBy('createdAt', descending: true).get();
+    final snapshot = await _factsCollection
+        .orderBy('createdAt', descending: true)
+        .get();
 
     return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
   }
@@ -182,7 +197,9 @@ class FirebaseService {
 
   /// Sync local data to cloud (full push)
   static Future<void> syncToCloud(
-      List<models.Source> sources, List<Fact> facts) async {
+    List<models.Source> sources,
+    List<Fact> facts,
+  ) async {
     if (!isSignedIn) return;
 
     final batch = _firestore.batch();
@@ -193,6 +210,7 @@ class FirebaseService {
       batch.set(docRef, {
         'name': source.name,
         'type': source.type.name,
+        'metadata': {}, // Empty metadata for sources created in Flutter app
         'createdAt': Timestamp.fromDate(source.createdAt),
         'updatedAt': Timestamp.fromDate(source.updatedAt),
       }, SetOptions(merge: true));
@@ -223,7 +241,7 @@ class FirebaseService {
 
   /// Sync from cloud to local (full pull)
   static Future<({List<models.Source> sources, List<Fact> facts})>
-      syncFromCloud() async {
+  syncFromCloud() async {
     if (!isSignedIn) return (sources: <models.Source>[], facts: <Fact>[]);
 
     // Fetch sources
@@ -239,6 +257,7 @@ class FirebaseService {
         createdAt: (data['createdAt'] as Timestamp).toDate(),
         updatedAt: (data['updatedAt'] as Timestamp).toDate(),
       );
+      // Note: metadata field is ignored in Flutter app's Source model
     }).toList();
 
     // Fetch facts
@@ -272,19 +291,22 @@ class FirebaseService {
     return _sourcesCollection
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data();
-              return models.Source(
-                id: doc.id,
-                name: data['name'],
-                type: models.SourceType.values.firstWhere(
-                  (t) => t.name == data['type'],
-                  orElse: () => models.SourceType.other,
-                ),
-                createdAt: (data['createdAt'] as Timestamp).toDate(),
-                updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-              );
-            }).toList());
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            return models.Source(
+              id: doc.id,
+              name: data['name'],
+              type: models.SourceType.values.firstWhere(
+                (t) => t.name == data['type'],
+                orElse: () => models.SourceType.other,
+              ),
+              createdAt: (data['createdAt'] as Timestamp).toDate(),
+              updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+            );
+            // Note: metadata field is ignored in Flutter app's Source model
+          }).toList(),
+        );
   }
 
   /// Real-time listener for facts
@@ -294,24 +316,26 @@ class FirebaseService {
     return _factsCollection
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-              final data = doc.data();
-              return Fact(
-                id: doc.id,
-                content: data['content'] ?? '',
-                sourceId: data['sourceId'] ?? '',
-                subjects: List<String>.from(data['subjects'] ?? []),
-                imageUrl: data['imageUrl'],
-                ocrText: data['ocrText'],
-                repetitions: data['repetitions'] ?? 0,
-                easeFactor: (data['easeFactor'] ?? 2.5).toDouble(),
-                interval: data['interval'] ?? 0,
-                nextReviewAt: data['nextReviewAt'] != null
-                    ? (data['nextReviewAt'] as Timestamp).toDate()
-                    : null,
-                createdAt: (data['createdAt'] as Timestamp).toDate(),
-                updatedAt: (data['updatedAt'] as Timestamp).toDate(),
-              );
-            }).toList());
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            return Fact(
+              id: doc.id,
+              content: data['content'] ?? '',
+              sourceId: data['sourceId'] ?? '',
+              subjects: List<String>.from(data['subjects'] ?? []),
+              imageUrl: data['imageUrl'],
+              ocrText: data['ocrText'],
+              repetitions: data['repetitions'] ?? 0,
+              easeFactor: (data['easeFactor'] ?? 2.5).toDouble(),
+              interval: data['interval'] ?? 0,
+              nextReviewAt: data['nextReviewAt'] != null
+                  ? (data['nextReviewAt'] as Timestamp).toDate()
+                  : null,
+              createdAt: (data['createdAt'] as Timestamp).toDate(),
+              updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+            );
+          }).toList(),
+        );
   }
 }
