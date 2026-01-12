@@ -27,3 +27,8 @@ build/
 # Secrets
 secrets.dart
 **/secrets/
+
+# Planning documents
+CHROME_EXTENSION_PLAN.md
+*_PLAN.md
+*_TODO.md
