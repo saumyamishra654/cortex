@@ -1,27 +1,34 @@
 import 'package:flutter/material.dart';
 import '../models/source.dart';
 import '../models/fact.dart';
+import '../models/fact_link.dart';
 import '../services/storage_service.dart';
 import '../services/firebase_service.dart';
+import '../services/link_service.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:async';
 
 class DataProvider extends ChangeNotifier {
   final StorageService _storage;
   final Uuid _uuid = const Uuid();
+  late final LinkService _linkService;
 
   List<Source> _sources = [];
   List<Fact> _facts = [];
+  List<FactLink> _factLinks = [];
   bool _isLoading = true;
   bool _isSyncing = false;
 
   StreamSubscription? _sourcesSubscription;
   StreamSubscription? _factsSubscription;
 
-  DataProvider(this._storage);
+  DataProvider(this._storage) {
+    _linkService = LinkService(_storage);
+  }
 
   List<Source> get sources => _sources;
   List<Fact> get facts => _facts;
+  List<FactLink> get factLinks => _factLinks;
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;
 
@@ -144,6 +151,7 @@ class DataProvider extends ChangeNotifier {
   Future<void> _loadData() async {
     _sources = await _storage.getAllSources();
     _facts = await _storage.getAllFacts();
+    _factLinks = await _storage.getAllFactLinks();
   }
 
   /// Get facts for a specific source
@@ -201,6 +209,9 @@ class DataProvider extends ChangeNotifier {
     await _storage.saveFact(fact);
     _facts.add(fact);
 
+    // Create links for this fact
+    await _updateLinksForFact(fact);
+
     // Sync to Firebase if signed in
     if (FirebaseService.isSignedIn) {
       try {
@@ -223,6 +234,9 @@ class DataProvider extends ChangeNotifier {
       _facts[index] = fact;
     }
 
+    // Update links for this fact
+    await _updateLinksForFact(fact);
+
     // Sync to Firebase if signed in
     if (FirebaseService.isSignedIn) {
       try {
@@ -232,6 +246,54 @@ class DataProvider extends ChangeNotifier {
       }
     }
 
+    notifyListeners();
+  }
+
+  /// Create or update links for a fact based on [[link]] syntax
+  Future<void> _updateLinksForFact(Fact fact) async {
+    // Parse links from content
+    if (!_linkService.hasLinks(fact.content)) {
+      return;
+    }
+
+    // Create new links
+    final newLinks = await _linkService.createLinksForFact(
+      fact,
+      _facts,
+      _factLinks,
+    );
+
+    // Save new links
+    for (final link in newLinks) {
+      await _storage.saveFactLink(link);
+      _factLinks.add(link);
+      debugPrint(
+        'Created link: ${link.sourceFactId} -> ${link.targetFactId} ("${link.linkText}")',
+      );
+    }
+
+    if (newLinks.isNotEmpty) {
+      notifyListeners();
+    }
+  }
+
+  /// Refresh links for all facts
+  Future<void> refreshAllLinks() async {
+    debugPrint('Refreshing links for ${_facts.length} facts...');
+
+    // Clear existing links
+    _factLinks.clear();
+    final allLinks = await _storage.getAllFactLinks();
+    for (final link in allLinks) {
+      await _storage.deleteFactLink(link.id);
+    }
+
+    // Recreate links for all facts
+    for (final fact in _facts) {
+      await _updateLinksForFact(fact);
+    }
+
+    debugPrint('Link refresh complete. Total links: ${_factLinks.length}');
     notifyListeners();
   }
 
@@ -287,6 +349,16 @@ class DataProvider extends ChangeNotifier {
     // Delete locally
     await _storage.deleteFact(factId);
     _facts.removeWhere((f) => f.id == factId);
+
+    // Delete associated links
+    final linksToDelete = _factLinks.where((link) {
+      return link.sourceFactId == factId || link.targetFactId == factId;
+    }).toList();
+
+    for (final link in linksToDelete) {
+      await _storage.deleteFactLink(link.id);
+      _factLinks.removeWhere((l) => l.id == link.id);
+    }
 
     // Sync to Firebase if signed in
     if (FirebaseService.isSignedIn) {

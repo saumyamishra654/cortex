@@ -240,25 +240,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: theme.textTheme.titleMedium,
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.link_rounded),
-            title: const Text('Fact Links'),
-            trailing: Text(
-              '${provider.factLinks.length}',
-              style: theme.textTheme.titleMedium,
-            ),
-          ),
-          const Divider(height: 32),
-
-          // Maintenance Section
-          _SectionHeader(title: 'Maintenance'),
-          ListTile(
-            leading: const Icon(Icons.refresh_rounded),
-            title: const Text('Refresh All Links'),
-            subtitle: const Text('Rebuild [[wiki links]] from all facts'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => _refreshLinks(provider),
-          ),
           const Divider(height: 32),
 
           // About Section

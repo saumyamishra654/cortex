@@ -19,23 +19,21 @@ class _GraphScreenState extends State<GraphScreen> {
   bool _showSemanticEdges = true;
   String? _filterSourceId;
   String? _filterSubject;
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Knowledge Graph'),
         actions: [
           IconButton(
             icon: Icon(
-              _showSemanticEdges 
-                  ? Icons.link_rounded 
-                  : Icons.link_off_rounded,
+              _showSemanticEdges ? Icons.link_rounded : Icons.link_off_rounded,
             ),
-            tooltip: _showSemanticEdges 
-                ? 'Hide semantic connections' 
+            tooltip: _showSemanticEdges
+                ? 'Hide semantic connections'
                 : 'Show semantic connections',
             onPressed: () {
               setState(() {
@@ -68,15 +66,17 @@ class _GraphScreenState extends State<GraphScreen> {
                   ),
                 ),
                 const PopupMenuDivider(),
-                ...provider.sources.map((source) => PopupMenuItem(
-                  value: 'source_${source.id}',
-                  child: Text(source.name),
-                  onTap: () {
-                    setState(() {
-                      _filterSourceId = source.id;
-                    });
-                  },
-                )),
+                ...provider.sources.map(
+                  (source) => PopupMenuItem(
+                    value: 'source_${source.id}',
+                    child: Text(source.name),
+                    onTap: () {
+                      setState(() {
+                        _filterSourceId = source.id;
+                      });
+                    },
+                  ),
+                ),
               ];
             },
           ),
@@ -87,7 +87,7 @@ class _GraphScreenState extends State<GraphScreen> {
           if (provider.isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
-          
+
           if (provider.facts.isEmpty) {
             return Center(
               child: Column(
@@ -99,10 +99,7 @@ class _GraphScreenState extends State<GraphScreen> {
                     color: theme.colorScheme.primary.withValues(alpha: 0.5),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    'No facts yet',
-                    style: theme.textTheme.headlineSmall,
-                  ),
+                  Text('No facts yet', style: theme.textTheme.headlineSmall),
                   const SizedBox(height: 8),
                   Text(
                     'Add facts to build your knowledge graph',
@@ -112,34 +109,37 @@ class _GraphScreenState extends State<GraphScreen> {
               ),
             );
           }
-          
+
           // Filter facts
           var facts = provider.facts;
           if (_filterSourceId != null) {
             facts = facts.where((f) => f.sourceId == _filterSourceId).toList();
           }
           if (_filterSubject != null) {
-            facts = facts.where((f) => f.subjects.contains(_filterSubject)).toList();
+            facts = facts
+                .where((f) => f.subjects.contains(_filterSubject))
+                .toList();
           }
-          
+
           // Build graph data
           final graphService = GraphService(EmbeddingService());
-          final links = <FactLink>[]; // TODO: Get from provider
+          final links = provider.factLinks; // Get links from provider
           final graphData = graphService.buildGraph(
-            facts, 
+            facts,
             links,
             includeSemanticEdges: _showSemanticEdges,
           );
-          
-          final sources = {
-            for (final s in provider.sources) s.id: s
-          };
-          
+
+          final sources = {for (final s in provider.sources) s.id: s};
+
           return Column(
             children: [
               // Stats bar
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 color: theme.colorScheme.surface,
                 child: Row(
                   children: [
@@ -151,21 +151,23 @@ class _GraphScreenState extends State<GraphScreen> {
                     const SizedBox(width: 12),
                     _StatChip(
                       icon: Icons.link,
-                      label: '${graphData.edges.where((e) => e.type == EdgeType.manual).length} links',
+                      label:
+                          '${graphData.edges.where((e) => e.type == EdgeType.manual).length} links',
                       color: theme.colorScheme.secondary,
                     ),
                     if (_showSemanticEdges) ...[
                       const SizedBox(width: 12),
                       _StatChip(
                         icon: Icons.hub,
-                        label: '${graphData.edges.where((e) => e.type == EdgeType.semantic).length} semantic',
+                        label:
+                            '${graphData.edges.where((e) => e.type == EdgeType.semantic).length} semantic',
                         color: theme.colorScheme.tertiary,
                       ),
                     ],
                   ],
                 ),
               ),
-              
+
               // Graph
               Expanded(
                 child: KnowledgeGraph(
@@ -181,7 +183,7 @@ class _GraphScreenState extends State<GraphScreen> {
                   },
                 ),
               ),
-              
+
               // Legend
               Container(
                 padding: const EdgeInsets.all(12),
@@ -229,10 +231,7 @@ class _StatChip extends StatelessWidget {
       children: [
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
@@ -259,20 +258,19 @@ class _LegendItem extends StatelessWidget {
           height: 2,
           decoration: BoxDecoration(
             color: isSolid ? color : Colors.transparent,
-            border: isSolid ? null : Border(
-              bottom: BorderSide(
-                color: color,
-                width: 1,
-                style: BorderStyle.solid,
-              ),
-            ),
+            border: isSolid
+                ? null
+                : Border(
+                    bottom: BorderSide(
+                      color: color,
+                      width: 1,
+                      style: BorderStyle.solid,
+                    ),
+                  ),
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
