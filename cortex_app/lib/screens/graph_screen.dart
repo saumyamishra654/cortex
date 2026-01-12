@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/fact.dart';
-import '../models/fact_link.dart';
 import '../providers/data_provider.dart';
 import '../services/graph_service.dart';
 import '../services/embedding_service.dart';
@@ -121,14 +119,30 @@ class _GraphScreenState extends State<GraphScreen> {
                 .toList();
           }
 
+          // Get fact IDs for filtering links
+          final factIds = facts.map((f) => f.id).toSet();
+          
+          // Filter links to only include those between visible facts
+          final links = provider.factLinks.where((link) {
+            return factIds.contains(link.sourceFactId) && 
+                   factIds.contains(link.targetFactId);
+          }).toList();
+          
+          // Debug: print link info
+          debugPrint('Graph: ${facts.length} facts, ${provider.factLinks.length} total links, ${links.length} filtered links');
+          for (final link in links) {
+            debugPrint('  Link: ${link.sourceFactId.substring(0, 8)} -> ${link.targetFactId.substring(0, 8)} ("${link.linkText}")');
+          }
+
           // Build graph data
           final graphService = GraphService(EmbeddingService());
-          final links = provider.factLinks; // Get links from provider
           final graphData = graphService.buildGraph(
             facts,
             links,
             includeSemanticEdges: _showSemanticEdges,
           );
+          
+          debugPrint('GraphData: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges');
 
           final sources = {for (final s in provider.sources) s.id: s};
 

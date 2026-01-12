@@ -7,10 +7,7 @@ import '../providers/data_provider.dart';
 class EditFactScreen extends StatefulWidget {
   final Fact fact;
 
-  const EditFactScreen({
-    super.key,
-    required this.fact,
-  });
+  const EditFactScreen({super.key, required this.fact});
 
   @override
   State<EditFactScreen> createState() => _EditFactScreenState();
@@ -43,7 +40,7 @@ class _EditFactScreenState extends State<EditFactScreen> {
     final theme = Theme.of(context);
     final provider = context.watch<DataProvider>();
     final existingSubjects = provider.allSubjects;
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Fact'),
@@ -60,16 +57,11 @@ class _EditFactScreenState extends State<EditFactScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // Source selector
-            Text(
-              'Source',
-              style: theme.textTheme.titleMedium,
-            ),
+            Text('Source', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: _selectedSourceId,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(border: OutlineInputBorder()),
               items: provider.sources.map((source) {
                 return DropdownMenuItem(
                   value: source.id,
@@ -89,13 +81,18 @@ class _EditFactScreenState extends State<EditFactScreen> {
               },
             ),
             const SizedBox(height: 24),
-            
+
             // Content input
             TextFormField(
               controller: _contentController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Fact',
                 hintText: 'Enter your fact or idea...',
+                helperText: 'Use [[text]] to link to other facts',
+                helperStyle: TextStyle(
+                  color: theme.colorScheme.secondary,
+                  fontSize: 12,
+                ),
                 alignLabelWithHint: true,
               ),
               maxLines: 6,
@@ -107,14 +104,11 @@ class _EditFactScreenState extends State<EditFactScreen> {
               },
             ),
             const SizedBox(height: 24),
-            
+
             // Subject tags
-            Text(
-              'Subject Tags',
-              style: theme.textTheme.titleMedium,
-            ),
+            Text('Subject Tags', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
-            
+
             // Selected subjects
             if (_selectedSubjects.isNotEmpty) ...[
               Wrap(
@@ -133,7 +127,7 @@ class _EditFactScreenState extends State<EditFactScreen> {
               ),
               const SizedBox(height: 12),
             ],
-            
+
             // Add subject input
             Row(
               children: [
@@ -155,14 +149,11 @@ class _EditFactScreenState extends State<EditFactScreen> {
                 ),
               ],
             ),
-            
+
             // Existing subjects suggestion
             if (existingSubjects.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(
-                'Existing subjects:',
-                style: theme.textTheme.bodySmall,
-              ),
+              Text('Existing subjects:', style: theme.textTheme.bodySmall),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -171,25 +162,23 @@ class _EditFactScreenState extends State<EditFactScreen> {
                     .where((s) => !_selectedSubjects.contains(s))
                     .take(10)
                     .map((subject) {
-                  return ActionChip(
-                    label: Text(subject),
-                    onPressed: () {
-                      setState(() {
-                        if (!_selectedSubjects.contains(subject)) {
-                          _selectedSubjects.add(subject);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
+                      return ActionChip(
+                        label: Text(subject),
+                        onPressed: () {
+                          setState(() {
+                            if (!_selectedSubjects.contains(subject)) {
+                              _selectedSubjects.add(subject);
+                            }
+                          });
+                        },
+                      );
+                    })
+                    .toList(),
               ),
             ],
-            
+
             const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _save,
-              child: const Text('Save Changes'),
-            ),
+            ElevatedButton(onPressed: _save, child: const Text('Save Changes')),
           ],
         ),
       ),
@@ -243,9 +232,9 @@ class _EditFactScreenState extends State<EditFactScreen> {
         nextReviewAt: widget.fact.nextReviewAt,
         embedding: widget.fact.embedding,
       );
-      
+
       await context.read<DataProvider>().updateFact(updatedFact);
-      
+
       if (mounted) {
         Navigator.pop(context);
       }

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/fact.dart';
 import '../models/source.dart';
@@ -180,18 +181,24 @@ class _GraphPainter extends CustomPainter {
       if (start == null || end == null) continue;
       
       final paint = Paint()
-        ..strokeWidth = edge.type == EdgeType.manual ? 2 : 1
+        ..strokeWidth = edge.type == EdgeType.manual ? 2.5 : 1
         ..style = PaintingStyle.stroke;
       
       if (edge.type == EdgeType.manual) {
-        paint.color = (isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary)
-            .withValues(alpha: 0.6);
+        // Use distinct color based on link text
+        paint.color = GraphEdge.colorForLinkText(edge.linkText, isDark)
+            .withValues(alpha: 0.8);
       } else {
         paint.color = (isDark ? AppTheme.darkSecondary : AppTheme.lightSecondary)
             .withValues(alpha: edge.weight * 0.5);
       }
       
       canvas.drawLine(start, end, paint);
+      
+      // Draw arrowhead for manual links
+      if (edge.type == EdgeType.manual) {
+        _drawArrowhead(canvas, start, end, paint.color);
+      }
     }
     
     // Draw nodes
@@ -248,6 +255,33 @@ class _GraphPainter extends CustomPainter {
       case null:
         return isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary;
     }
+  }
+  
+  void _drawArrowhead(Canvas canvas, Offset start, Offset end, Color color) {
+    final direction = (end - start);
+    final length = direction.distance;
+    if (length < 20) return; // Too short for arrow
+    
+    final unitDir = direction / length;
+    // Position arrowhead slightly before the end (account for node size)
+    final arrowTip = end - unitDir * 15;
+    
+    final arrowSize = 8.0;
+    final angle = math.atan2(unitDir.dy, unitDir.dx);
+    
+    final path = Path();
+    path.moveTo(arrowTip.dx, arrowTip.dy);
+    path.lineTo(
+      arrowTip.dx - arrowSize * math.cos(angle - 0.5),
+      arrowTip.dy - arrowSize * math.sin(angle - 0.5),
+    );
+    path.lineTo(
+      arrowTip.dx - arrowSize * math.cos(angle + 0.5),
+      arrowTip.dy - arrowSize * math.sin(angle + 0.5),
+    );
+    path.close();
+    
+    canvas.drawPath(path, Paint()..color = color..style = PaintingStyle.fill);
   }
 
   @override

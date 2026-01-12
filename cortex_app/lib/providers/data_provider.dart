@@ -45,6 +45,9 @@ class DataProvider extends ChangeNotifier {
       startFirebaseListeners();
     }
 
+    // Auto-refresh links on startup to ensure connections are up-to-date
+    await refreshAllLinks();
+
     _isLoading = false;
     notifyListeners();
   }
@@ -121,8 +124,25 @@ class DataProvider extends ChangeNotifier {
   }
 
   /// Merge Firebase facts with local facts
-  void _mergeFacts(List<Fact> firebaseFacts) {
+  Future<void> _mergeFacts(List<Fact> firebaseFacts) async {
     bool hasChanges = false;
+    final firebaseIds = firebaseFacts.map((f) => f.id).toSet();
+
+    // Remove local facts that no longer exist in Firebase
+    final factsToRemove = _facts.where((f) => !firebaseIds.contains(f.id)).toList();
+    for (final fact in factsToRemove) {
+      _facts.removeWhere((f) => f.id == fact.id);
+      await _storage.deleteFact(fact.id);
+      // Remove associated links
+      final linksToRemove = _factLinks.where((l) => 
+        l.sourceFactId == fact.id || l.targetFactId == fact.id
+      ).toList();
+      for (final link in linksToRemove) {
+        _factLinks.removeWhere((l) => l.id == link.id);
+        await _storage.deleteFactLink(link.id);
+      }
+      hasChanges = true;
+    }
 
     for (final firebaseFact in firebaseFacts) {
       final localIndex = _facts.indexWhere((f) => f.id == firebaseFact.id);
@@ -144,6 +164,8 @@ class DataProvider extends ChangeNotifier {
     }
 
     if (hasChanges) {
+      // Refresh links when facts change
+      await refreshAllLinks();
       notifyListeners();
     }
   }

@@ -40,6 +40,7 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
           : _buildCollectionList(builtInCollections),
       floatingActionButton: _selectedCollection == null
           ? FloatingActionButton.extended(
+              heroTag: 'collections_new',
               onPressed: () {
                 // TODO: Open create collection dialog
                 ScaffoldMessenger.of(context).showSnackBar(

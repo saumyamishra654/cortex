@@ -1,5 +1,11 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+/// Embedding provider options
+enum EmbeddingProvider {
+  openai,
+  huggingface,
+}
+
 /// Service for securely storing sensitive data like API keys
 /// Uses platform-native secure storage:
 /// - iOS: Keychain
@@ -18,26 +24,76 @@ class SecureStorageService {
   
   // Keys
   static const _openAiApiKey = 'openai_api_key';
+  static const _huggingFaceApiKey = 'huggingface_api_key';
+  static const _embeddingProvider = 'embedding_provider';
   
-  /// Save OpenAI API key securely
+  // OpenAI API Key
   static Future<void> saveOpenAiApiKey(String apiKey) async {
     await _storage.write(key: _openAiApiKey, value: apiKey);
   }
   
-  /// Get stored OpenAI API key
   static Future<String?> getOpenAiApiKey() async {
     return await _storage.read(key: _openAiApiKey);
   }
   
-  /// Delete OpenAI API key
   static Future<void> deleteOpenAiApiKey() async {
     await _storage.delete(key: _openAiApiKey);
   }
   
-  /// Check if API key is configured
   static Future<bool> hasOpenAiApiKey() async {
     final key = await getOpenAiApiKey();
     return key != null && key.isNotEmpty;
+  }
+  
+  // Hugging Face API Key
+  static Future<void> saveHuggingFaceApiKey(String apiKey) async {
+    await _storage.write(key: _huggingFaceApiKey, value: apiKey);
+  }
+  
+  static Future<String?> getHuggingFaceApiKey() async {
+    return await _storage.read(key: _huggingFaceApiKey);
+  }
+  
+  static Future<void> deleteHuggingFaceApiKey() async {
+    await _storage.delete(key: _huggingFaceApiKey);
+  }
+  
+  static Future<bool> hasHuggingFaceApiKey() async {
+    final key = await getHuggingFaceApiKey();
+    return key != null && key.isNotEmpty;
+  }
+  
+  // Embedding Provider Preference
+  static Future<void> saveEmbeddingProvider(EmbeddingProvider provider) async {
+    await _storage.write(key: _embeddingProvider, value: provider.name);
+  }
+  
+  static Future<EmbeddingProvider> getEmbeddingProvider() async {
+    final value = await _storage.read(key: _embeddingProvider);
+    if (value == 'openai') return EmbeddingProvider.openai;
+    return EmbeddingProvider.huggingface; // Default to free option
+  }
+  
+  /// Get the API key for the current provider
+  static Future<String?> getActiveApiKey() async {
+    final provider = await getEmbeddingProvider();
+    switch (provider) {
+      case EmbeddingProvider.openai:
+        return getOpenAiApiKey();
+      case EmbeddingProvider.huggingface:
+        return getHuggingFaceApiKey();
+    }
+  }
+  
+  /// Check if the active provider has an API key configured
+  static Future<bool> hasActiveApiKey() async {
+    final provider = await getEmbeddingProvider();
+    switch (provider) {
+      case EmbeddingProvider.openai:
+        return hasOpenAiApiKey();
+      case EmbeddingProvider.huggingface:
+        return hasHuggingFaceApiKey();
+    }
   }
   
   /// Delete all stored secrets

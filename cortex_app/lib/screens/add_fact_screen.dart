@@ -6,10 +6,7 @@ import '../providers/data_provider.dart';
 class AddFactScreen extends StatefulWidget {
   final Source source;
 
-  const AddFactScreen({
-    super.key,
-    required this.source,
-  });
+  const AddFactScreen({super.key, required this.source});
 
   @override
   State<AddFactScreen> createState() => _AddFactScreenState();
@@ -33,11 +30,9 @@ class _AddFactScreenState extends State<AddFactScreen> {
     final theme = Theme.of(context);
     final provider = context.watch<DataProvider>();
     final existingSubjects = provider.allSubjects;
-    
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('New Fact'),
-      ),
+      appBar: AppBar(title: const Text('New Fact')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -69,13 +64,18 @@ class _AddFactScreenState extends State<AddFactScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Content input
             TextFormField(
               controller: _contentController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Fact',
                 hintText: 'Enter a single fact or idea...',
+                helperText: 'Use [[text]] to link to other facts',
+                helperStyle: TextStyle(
+                  color: theme.colorScheme.secondary,
+                  fontSize: 12,
+                ),
                 alignLabelWithHint: true,
               ),
               maxLines: 6,
@@ -88,14 +88,11 @@ class _AddFactScreenState extends State<AddFactScreen> {
               autofocus: true,
             ),
             const SizedBox(height: 24),
-            
+
             // Subject tags
-            Text(
-              'Subject Tags',
-              style: theme.textTheme.titleMedium,
-            ),
+            Text('Subject Tags', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
-            
+
             // Selected subjects
             if (_selectedSubjects.isNotEmpty) ...[
               Wrap(
@@ -114,7 +111,7 @@ class _AddFactScreenState extends State<AddFactScreen> {
               ),
               const SizedBox(height: 12),
             ],
-            
+
             // Add subject input
             Row(
               children: [
@@ -136,14 +133,11 @@ class _AddFactScreenState extends State<AddFactScreen> {
                 ),
               ],
             ),
-            
+
             // Existing subjects suggestion
             if (existingSubjects.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(
-                'Existing subjects:',
-                style: theme.textTheme.bodySmall,
-              ),
+              Text('Existing subjects:', style: theme.textTheme.bodySmall),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -152,25 +146,23 @@ class _AddFactScreenState extends State<AddFactScreen> {
                     .where((s) => !_selectedSubjects.contains(s))
                     .take(10)
                     .map((subject) {
-                  return ActionChip(
-                    label: Text(subject),
-                    onPressed: () {
-                      setState(() {
-                        if (!_selectedSubjects.contains(subject)) {
-                          _selectedSubjects.add(subject);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
+                      return ActionChip(
+                        label: Text(subject),
+                        onPressed: () {
+                          setState(() {
+                            if (!_selectedSubjects.contains(subject)) {
+                              _selectedSubjects.add(subject);
+                            }
+                          });
+                        },
+                      );
+                    })
+                    .toList(),
               ),
             ],
-            
+
             const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _submit,
-              child: const Text('Save Fact'),
-            ),
+            ElevatedButton(onPressed: _submit, child: const Text('Save Fact')),
           ],
         ),
       ),

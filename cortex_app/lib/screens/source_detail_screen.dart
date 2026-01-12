@@ -157,6 +157,7 @@ class SourceDetailScreen extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'source_detail_add_fact',
         onPressed: () => _navigateToAddFact(context),
         child: const Icon(Icons.add_rounded),
       ),

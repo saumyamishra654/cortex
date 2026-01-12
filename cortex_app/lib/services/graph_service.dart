@@ -1,5 +1,6 @@
 import 'dart:math';
-import 'dart:ui' show Offset, Size;
+import 'dart:ui' show Color, Offset, Size;
+import 'package:flutter/painting.dart' show HSLColor;
 import '../models/fact.dart';
 import '../models/fact_link.dart';
 import 'embedding_service.dart';
@@ -39,6 +40,7 @@ class GraphService {
         targetId: link.targetFactId,
         type: EdgeType.manual,
         weight: 1.0,
+        linkText: link.linkText,
       ));
     }
     
@@ -228,13 +230,28 @@ class GraphEdge {
   final String targetId;
   final EdgeType type;
   final double weight; // 0-1 for semantic, 1.0 for manual
+  final String? linkText; // The [[link]] text for manual links
   
   GraphEdge({
     required this.sourceId,
     required this.targetId,
     required this.type,
     required this.weight,
+    this.linkText,
   });
+  
+  /// Generate a consistent color for a link text
+  static Color colorForLinkText(String? text, bool isDark) {
+    if (text == null || text.isEmpty) {
+      return isDark ? const Color(0xFF90CAF9) : const Color(0xFF1976D2);
+    }
+    // Generate a hash-based hue for consistent colors
+    final hash = text.toLowerCase().hashCode;
+    final hue = (hash % 360).abs().toDouble();
+    final saturation = isDark ? 0.6 : 0.7;
+    final lightness = isDark ? 0.65 : 0.45;
+    return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
+  }
 }
 
 /// Complete graph data

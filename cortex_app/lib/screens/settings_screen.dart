@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/data_provider.dart';
@@ -19,22 +20,29 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _apiKeyController = TextEditingController();
+  final _openAiKeyController = TextEditingController();
+  final _huggingFaceKeyController = TextEditingController();
   bool _isApiKeyVisible = false;
-  bool _hasApiKey = false;
+  bool _hasOpenAiKey = false;
+  bool _hasHuggingFaceKey = false;
+  EmbeddingProvider _selectedProvider = EmbeddingProvider.huggingface;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _checkApiKey();
+    _loadSettings();
   }
 
-  Future<void> _checkApiKey() async {
-    final hasKey = await SecureStorageService.hasOpenAiApiKey();
+  Future<void> _loadSettings() async {
+    final hasOpenAi = await SecureStorageService.hasOpenAiApiKey();
+    final hasHuggingFace = await SecureStorageService.hasHuggingFaceApiKey();
+    final provider = await SecureStorageService.getEmbeddingProvider();
     if (mounted) {
       setState(() {
-        _hasApiKey = hasKey;
+        _hasOpenAiKey = hasOpenAi;
+        _hasHuggingFaceKey = hasHuggingFace;
+        _selectedProvider = provider;
         _isLoading = false;
       });
     }
@@ -42,7 +50,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _apiKeyController.dispose();
+    _openAiKeyController.dispose();
+    _huggingFaceKeyController.dispose();
     super.dispose();
   }
 
@@ -111,102 +120,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // API Configuration Section
-          _SectionHeader(title: 'API Configuration'),
+          // Embedding Provider Section
+          _SectionHeader(title: 'Embedding Provider'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      'OpenAI API Key',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (!_isLoading && _hasApiKey)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.15,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.check_circle,
-                              size: 14,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Configured',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 4),
                 Text(
-                  'Required for embedding-based related facts',
+                  'Choose how to generate semantic embeddings for finding related facts.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.secondary,
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _apiKeyController,
-                        obscureText: !_isApiKeyVisible,
-                        decoration: InputDecoration(
-                          hintText: _hasApiKey ? '************' : 'sk-...',
-                          isDense: true,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isApiKeyVisible
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isApiKeyVisible = !_isApiKeyVisible;
-                              });
-                            },
+                
+                // Provider Selection
+                _ProviderTile(
+                  title: 'Hugging Face',
+                  subtitle: 'Free • No credit card required',
+                  icon: Icons.hub_rounded,
+                  isSelected: _selectedProvider == EmbeddingProvider.huggingface,
+                  isConfigured: _hasHuggingFaceKey,
+                  onTap: () => _selectProvider(EmbeddingProvider.huggingface),
+                ),
+                const SizedBox(height: 8),
+                _ProviderTile(
+                  title: 'OpenAI',
+                  subtitle: 'Paid • Higher quality embeddings',
+                  icon: Icons.auto_awesome_rounded,
+                  isSelected: _selectedProvider == EmbeddingProvider.openai,
+                  isConfigured: _hasOpenAiKey,
+                  onTap: () => _selectProvider(EmbeddingProvider.openai),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Info for web users about CORS proxy
+                if (kIsWeb && _selectedProvider == EmbeddingProvider.huggingface)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Using CORS proxy for browser compatibility. If embedding fails, try again later or use OpenAI.',
+                            style: theme.textTheme.bodySmall?.copyWith(color: Colors.blue.shade800),
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _saveApiKey,
-                      child: const Text('Save'),
-                    ),
-                  ],
-                ),
-                if (_hasApiKey) ...[
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: _deleteApiKey,
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('Remove API Key'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: theme.colorScheme.error,
-                    ),
+                  ),
+                
+                // API Key Input for selected provider
+                if (_selectedProvider == EmbeddingProvider.huggingface) ...[
+                  _buildApiKeySection(
+                    theme: theme,
+                    title: 'Hugging Face Token',
+                    hint: 'hf_...',
+                    controller: _huggingFaceKeyController,
+                    hasKey: _hasHuggingFaceKey,
+                    onSave: _saveHuggingFaceKey,
+                    onDelete: _deleteHuggingFaceKey,
+                    helpText: 'Get a free token at huggingface.co → Settings → Access Tokens',
+                  ),
+                ] else ...[
+                  _buildApiKeySection(
+                    theme: theme,
+                    title: 'OpenAI API Key',
+                    hint: 'sk-...',
+                    controller: _openAiKeyController,
+                    hasKey: _hasOpenAiKey,
+                    onSave: _saveOpenAiKey,
+                    onDelete: _deleteOpenAiKey,
+                    helpText: 'Requires paid OpenAI account',
                   ),
                 ],
               ],
@@ -319,55 +314,185 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _saveApiKey() async {
-    final key = _apiKeyController.text.trim();
+  Future<void> _selectProvider(EmbeddingProvider provider) async {
+    await SecureStorageService.saveEmbeddingProvider(provider);
+    setState(() {
+      _selectedProvider = provider;
+    });
+  }
+
+  Widget _buildApiKeySection({
+    required ThemeData theme,
+    required String title,
+    required String hint,
+    required TextEditingController controller,
+    required bool hasKey,
+    required VoidCallback onSave,
+    required VoidCallback onDelete,
+    required String helpText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (!_isLoading && hasKey)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle, size: 14, color: theme.colorScheme.primary),
+                    const SizedBox(width: 4),
+                    Text('Configured', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          helpText,
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.secondary),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                obscureText: !_isApiKeyVisible,
+                decoration: InputDecoration(
+                  hintText: hasKey ? '************' : hint,
+                  isDense: true,
+                  suffixIcon: IconButton(
+                    icon: Icon(_isApiKeyVisible ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _isApiKeyVisible = !_isApiKeyVisible),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(onPressed: onSave, child: const Text('Save')),
+          ],
+        ),
+        if (hasKey) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('Remove Token'),
+            style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _saveHuggingFaceKey() async {
+    final key = _huggingFaceKeyController.text.trim();
     if (key.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter an API key')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a token')),
+      );
       return;
     }
 
-    // Basic validation
+    if (!key.startsWith('hf_')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid token format. Should start with hf_')),
+      );
+      return;
+    }
+
+    await SecureStorageService.saveHuggingFaceApiKey(key);
+    _huggingFaceKeyController.clear();
+    setState(() => _hasHuggingFaceKey = true);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Hugging Face token saved')),
+      );
+    }
+  }
+
+  Future<void> _deleteHuggingFaceKey() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Token?'),
+        content: const Text('This will delete your saved Hugging Face token.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await SecureStorageService.deleteHuggingFaceApiKey();
+      setState(() => _hasHuggingFaceKey = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Token removed')),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveOpenAiKey() async {
+    final key = _openAiKeyController.text.trim();
+    if (key.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an API key')),
+      );
+      return;
+    }
+
     if (!key.startsWith('sk-')) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid API key format')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid API key format. Should start with sk-')),
+      );
       return;
     }
 
     await SecureStorageService.saveOpenAiApiKey(key);
-    _apiKeyController.clear();
-
-    setState(() {
-      _hasApiKey = true;
-    });
+    _openAiKeyController.clear();
+    setState(() => _hasOpenAiKey = true);
 
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('API key saved securely')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OpenAI API key saved')),
+      );
     }
   }
 
-  Future<void> _deleteApiKey() async {
+  Future<void> _deleteOpenAiKey() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove API Key?'),
-        content: const Text(
-          'This will delete your saved API key. You\'ll need to enter it again to use embedding features.',
-        ),
+        content: const Text('This will delete your saved OpenAI API key.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
             child: const Text('Remove'),
           ),
         ],
@@ -376,13 +501,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (confirmed == true) {
       await SecureStorageService.deleteOpenAiApiKey();
-      setState(() {
-        _hasApiKey = false;
-      });
+      setState(() => _hasOpenAiKey = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('API key removed')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('API key removed')),
+        );
       }
     }
   }
@@ -447,6 +570,99 @@ class _SectionHeader extends StatelessWidget {
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
           color: Theme.of(context).colorScheme.primary,
           fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProviderTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool isSelected;
+  final bool isConfigured;
+  final VoidCallback onTap;
+
+  const _ProviderTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.isSelected,
+    required this.isConfigured,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected 
+                ? theme.colorScheme.primary 
+                : theme.colorScheme.outline.withValues(alpha: 0.3),
+            width: isSelected ? 2 : 1,
+          ),
+          color: isSelected 
+              ? theme.colorScheme.primary.withValues(alpha: 0.1) 
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? theme.colorScheme.primary : theme.colorScheme.onSurface,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (isConfigured) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ],
+                    ],
+                  ),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.secondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(
+                Icons.radio_button_checked,
+                color: theme.colorScheme.primary,
+              )
+            else
+              Icon(
+                Icons.radio_button_off,
+                color: theme.colorScheme.outline,
+              ),
+          ],
         ),
       ),
     );

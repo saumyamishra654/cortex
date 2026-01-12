@@ -6,6 +6,7 @@ import '../services/embedding_service.dart';
 import '../services/secure_storage_service.dart';
 import '../widgets/linked_text.dart';
 import '../widgets/related_facts_panel.dart';
+import 'link_references_screen.dart';
 
 class FactDetailScreen extends StatefulWidget {
   final Fact fact;
@@ -51,13 +52,15 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
     setState(() => _isGeneratingEmbedding = true);
 
     try {
-      final apiKey = await SecureStorageService.getOpenAiApiKey();
+      final apiKey = await SecureStorageService.getActiveApiKey();
+      final provider = await SecureStorageService.getEmbeddingProvider();
+      
       if (apiKey == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text(
-                'Please configure OpenAI API key in Settings',
+              content: Text(
+                'Please configure ${provider == EmbeddingProvider.huggingface ? "Hugging Face" : "OpenAI"} API key in Settings',
               ),
               action: SnackBarAction(
                 label: 'Settings',
@@ -72,7 +75,7 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
         return;
       }
 
-      final embeddingService = EmbeddingService(apiKey: apiKey);
+      final embeddingService = EmbeddingService(apiKey: apiKey, provider: provider);
       final embedding = await embeddingService.generateEmbedding(
         widget.fact.content,
       );
@@ -293,21 +296,13 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
                       height: 1.6,
                     ),
                     onLinkTap: (linkText) {
-                      // Find and navigate to linked fact
-                      final linkedFact = provider.facts.firstWhere(
-                        (f) => f.content.toLowerCase().contains(
-                          linkText.toLowerCase(),
+                      // Navigate to link references screen
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => LinkReferencesScreen(linkText: linkText),
                         ),
-                        orElse: () => widget.fact,
                       );
-                      if (linkedFact.id != widget.fact.id) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => FactDetailScreen(fact: linkedFact),
-                          ),
-                        );
-                      }
                     },
                   ),
                 ],

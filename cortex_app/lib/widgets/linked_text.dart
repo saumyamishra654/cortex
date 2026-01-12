@@ -1,5 +1,5 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import '../services/link_service.dart';
 import '../theme/app_theme.dart';
 
 /// Widget that renders fact content with clickable [[wiki links]]
@@ -23,9 +23,9 @@ class LinkedText extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     final spans = _parseContentSpans(content);
-    
+
     if (spans.isEmpty) {
       return Text(
         content,
@@ -34,34 +34,27 @@ class LinkedText extends StatelessWidget {
         overflow: overflow,
       );
     }
-    
+
     final textSpans = spans.map((span) {
-      if (span.isLink) {
-        return WidgetSpan(
-          alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic,
-          child: GestureDetector(
-            onTap: () => onLinkTap?.call(span.text),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: (isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary)
+      if (span.isLink && onLinkTap != null) {
+        return TextSpan(
+          text: span.text,
+          style: (style ?? theme.textTheme.bodyLarge)?.copyWith(
+            color: isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary,
+            fontWeight: FontWeight.w600,
+            decoration: TextDecoration.underline,
+            decorationColor:
+                (isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary)
+                    .withValues(alpha: 0.5),
+            decorationThickness: 2,
+            backgroundColor:
+                (isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary)
                     .withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: (isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary)
-                      .withValues(alpha: 0.3),
-                ),
-              ),
-              child: Text(
-                span.text,
-                style: (style ?? theme.textTheme.bodyLarge)?.copyWith(
-                  color: isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
           ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () {
+              onLinkTap!(span.text);
+            },
         );
       } else {
         return TextSpan(
@@ -70,47 +63,57 @@ class LinkedText extends StatelessWidget {
         );
       }
     }).toList();
-    
+
     return RichText(
       text: TextSpan(children: textSpans),
       maxLines: maxLines,
       overflow: overflow ?? TextOverflow.clip,
     );
   }
-  
+
   /// Parse content into spans (local implementation to avoid circular deps)
   List<ContentSpan> _parseContentSpans(String content) {
     final linkPattern = RegExp(r'\[\[([^\]]+)\]\]');
     final spans = <ContentSpan>[];
     int lastEnd = 0;
-    
+
     for (final match in linkPattern.allMatches(content)) {
       // Add text before this match
       if (match.start > lastEnd) {
-        spans.add(ContentSpan(
-          text: content.substring(lastEnd, match.start),
-          isLink: false,
-        ));
+        spans.add(
+          ContentSpan(
+            text: content.substring(lastEnd, match.start),
+            isLink: false,
+          ),
+        );
       }
-      
-      // Add the link
-      spans.add(ContentSpan(
-        text: match.group(1)!,
-        isLink: true,
-        fullMatch: match.group(0)!,
-      ));
-      
+
+      // Add the link (without the brackets)
+      spans.add(
+        ContentSpan(
+          text: match.group(1)!,
+          isLink: true,
+          fullMatch: match.group(0)!,
+        ),
+      );
+
       lastEnd = match.end;
     }
-    
+
     // Add remaining text
     if (lastEnd < content.length) {
-      spans.add(ContentSpan(
-        text: content.substring(lastEnd),
-        isLink: false,
-      ));
+      spans.add(ContentSpan(text: content.substring(lastEnd), isLink: false));
     }
-    
+
     return spans;
   }
+}
+
+/// Represents a span of content (either plain text or a link)
+class ContentSpan {
+  final String text;
+  final bool isLink;
+  final String? fullMatch;
+
+  ContentSpan({required this.text, required this.isLink, this.fullMatch});
 }

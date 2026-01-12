@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/fact.dart';
 import '../theme/app_theme.dart';
+import 'linked_text.dart';
+import '../screens/link_references_screen.dart';
 
 class Flashcard extends StatelessWidget {
   final Fact fact;
@@ -26,7 +28,7 @@ class Flashcard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -51,7 +53,7 @@ class Flashcard extends StatelessWidget {
             color: theme.colorScheme.primary,
           ),
           const SizedBox(height: 24),
-          
+
           // Flashcard
           Expanded(
             child: Container(
@@ -61,24 +63,26 @@ class Flashcard extends StatelessWidget {
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: isDark 
+                  color: isDark
                       ? AppTheme.darkPrimary.withValues(alpha: 0.3)
                       : AppTheme.lightCardBorder,
                   width: isDark ? 2 : 1,
                 ),
-                boxShadow: isDark ? [
-                  BoxShadow(
-                    color: AppTheme.darkPrimary.withValues(alpha: 0.15),
-                    blurRadius: 20,
-                    spreadRadius: 0,
-                  ),
-                ] : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: isDark
+                    ? [
+                        BoxShadow(
+                          color: AppTheme.darkPrimary.withValues(alpha: 0.15),
+                          blurRadius: 20,
+                          spreadRadius: 0,
+                        ),
+                      ]
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -86,12 +90,20 @@ class Flashcard extends StatelessWidget {
                   Expanded(
                     child: Center(
                       child: SingleChildScrollView(
-                        child: Text(
-                          fact.displayText,
+                        child: LinkedText(
+                          content: fact.displayText,
                           style: theme.textTheme.headlineSmall?.copyWith(
                             height: 1.5,
                           ),
-                          textAlign: TextAlign.center,
+                          onLinkTap: (linkText) {
+                            // Navigate to link references screen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => LinkReferencesScreen(linkText: linkText),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -106,7 +118,8 @@ class Flashcard extends StatelessWidget {
                         return Chip(
                           label: Text(subject),
                           padding: EdgeInsets.zero,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         );
                       }).toList(),
                     ),
@@ -136,7 +149,7 @@ class Flashcard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 32),
-          
+
           // Action buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -195,10 +208,7 @@ class _ActionButton extends StatelessWidget {
           child: Icon(icon, size: 28),
         ),
         const SizedBox(height: 8),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }

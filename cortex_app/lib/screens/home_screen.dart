@@ -103,6 +103,7 @@ class HomeScreen extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'home_add_source',
         onPressed: () => _showAddSourceDialog(context),
         icon: const Icon(Icons.add_rounded),
         label: const Text('Add Source'),
