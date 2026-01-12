@@ -26,15 +26,9 @@ class DefaultFirebaseOptions {
           'you can reconfigure this by running the FlutterFire CLI again.',
         );
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for windows - '
@@ -60,5 +54,26 @@ class DefaultFirebaseOptions {
     authDomain: 'cortex-efb27.firebaseapp.com',
     storageBucket: 'cortex-efb27.firebasestorage.app',
     measurementId: 'G-SWBLZ50YL8',
+  );
+
+  // iOS config from GoogleService-Info.plist
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyCYWazySm577_xP4IvNe04NuEYN4fcICaw',
+    appId: '1:37637573970:ios:a22400e00b7a9b20267e8b',
+    messagingSenderId: '37637573970',
+    projectId: 'cortex-efb27',
+    storageBucket: 'cortex-efb27.firebasestorage.app',
+    iosBundleId: 'com.cortex.cortexApp',
+  );
+
+  // macOS config - TEMPORARY: Register macOS app in Firebase Console for production
+  // Using iOS credentials - will fail until you register macOS in Firebase
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyCYWazySm577_xP4IvNe04NuEYN4fcICaw',
+    appId: '1:37637573970:ios:a22400e00b7a9b20267e8b',
+    messagingSenderId: '37637573970',
+    projectId: 'cortex-efb27',
+    storageBucket: 'cortex-efb27.firebasestorage.app',
+    iosBundleId: 'com.cortex.cortexApp',
   );
 }
