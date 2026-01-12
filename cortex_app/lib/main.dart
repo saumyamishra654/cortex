@@ -119,67 +119,13 @@ class _CortexAppState extends State<CortexApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
       home: _isCheckingAuth
-          ? const _SplashScreen()
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : _showAuth
           ? AuthScreen(onSignedIn: () => setState(() => _showAuth = false))
           : MainNavigation(
               isDarkMode: _isDarkMode,
               onToggleTheme: _toggleTheme,
             ),
-    );
-  }
-}
-
-/// Branded splash screen shown during initialization
-class _SplashScreen extends StatelessWidget {
-  const _SplashScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF1A1A2E) : const Color(0xFFF8F9FA),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.hub_rounded,
-              size: 80,
-              color: isDark ? Colors.white70 : const Color(0xFF6C63FF),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Cortex',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : const Color(0xFF2D3436),
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your Knowledge Network',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.white54 : Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 48),
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  isDark ? Colors.white54 : const Color(0xFF6C63FF),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
