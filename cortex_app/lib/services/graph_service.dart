@@ -63,7 +63,7 @@ class GraphService {
       for (int j = i + 1; j < facts.length; j++) {
         if (facts[j].embedding == null) continue;
         
-        final similarity = embeddingService!.cosineSimilarity(
+        final similarity = EmbeddingService.cosineSimilarity(
           facts[i].embedding!,
           facts[j].embedding!,
         );

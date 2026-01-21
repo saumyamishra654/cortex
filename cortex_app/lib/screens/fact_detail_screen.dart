@@ -28,24 +28,26 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
     _loadRelatedFacts();
   }
 
-  void _loadRelatedFacts() {
+  Future<void> _loadRelatedFacts() async {
     final provider = context.read<DataProvider>();
     final embeddingService = EmbeddingService();
 
     setState(() => _isLoadingRelated = true);
 
-    // Find related facts
-    final related = embeddingService.findRelatedFacts(
+    // Find related facts (now async for isolate support)
+    final related = await embeddingService.findRelatedFacts(
       widget.fact,
       provider.facts,
       limit: 5,
       threshold: 0.6,
     );
 
-    setState(() {
-      _relatedFacts = related;
-      _isLoadingRelated = false;
-    });
+    if (mounted) {
+      setState(() {
+        _relatedFacts = related;
+        _isLoadingRelated = false;
+      });
+    }
   }
 
   Future<void> _generateEmbedding() async {
@@ -147,8 +149,8 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
       return;
     }
 
-    final embeddingService = EmbeddingService();
-    final similarity = embeddingService.cosineSimilarity(
+    // Calculate similarity using static method
+    final similarity = EmbeddingService.cosineSimilarity(
       widget.fact.embedding!,
       selectedFact.embedding!,
     );

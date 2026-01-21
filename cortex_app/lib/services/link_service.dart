@@ -25,26 +25,46 @@ class LinkService {
   }
   
   /// Find a fact by its content (for linking)
-  /// Returns the best matching fact based on content similarity
+  /// Uses keyword matching for faster lookups
   Fact? findFactByContent(String linkText, List<Fact> allFacts) {
     final searchText = linkText.toLowerCase().trim();
+    final searchWords = searchText.split(RegExp(r'\s+'));
     
-    // First, try exact match
+    // Score-based matching: facts with more keyword matches rank higher
+    Fact? bestMatch;
+    int bestScore = 0;
+    
     for (final fact in allFacts) {
-      if (fact.content.toLowerCase().contains(searchText)) {
+      final contentLower = fact.content.toLowerCase();
+      
+      // Exact phrase match = highest priority
+      if (contentLower.contains(searchText)) {
         return fact;
+      }
+      
+      // Count keyword matches
+      int score = 0;
+      for (final word in searchWords) {
+        if (word.length > 2 && contentLower.contains(word)) {
+          score++;
+        }
+      }
+      
+      // Also check subjects
+      for (final subject in fact.subjects) {
+        if (subject.toLowerCase().contains(searchText)) {
+          score += 2; // Subject matches are weighted higher
+        }
+      }
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = fact;
       }
     }
     
-    // Then try partial match (first few words)
-    final searchWords = searchText.split(' ').take(3).join(' ');
-    for (final fact in allFacts) {
-      if (fact.content.toLowerCase().contains(searchWords)) {
-        return fact;
-      }
-    }
-    
-    return null;
+    // Only return if we have a reasonable confidence (at least 1 word match)
+    return bestScore > 0 ? bestMatch : null;
   }
   
   /// Create links for a fact based on its content

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, compute;
 import 'package:http/http.dart' as http;
 import '../models/fact.dart';
 import 'secure_storage_service.dart';
@@ -139,22 +139,24 @@ class EmbeddingService {
   }
   
   /// Generate embeddings for multiple texts (batch)
+  /// Runs with minimal delay to avoid rate limits
   Future<List<List<double>?>> generateEmbeddingsBatch(List<String> texts) async {
     if (!isConfigured) return List.filled(texts.length, null);
     
-    // For now, process sequentially (HuggingFace free tier has rate limits)
     final results = <List<double>?>[];
     for (final text in texts) {
       final embedding = await generateEmbedding(text);
       results.add(embedding);
-      // Small delay to avoid rate limits
-      await Future.delayed(const Duration(milliseconds: 100));
+      // Minimal delay for rate limiting (reduced from 100ms)
+      if (texts.length > 1) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
     }
     return results;
   }
   
-  /// Calculate cosine similarity between two embeddings
-  double cosineSimilarity(List<double> a, List<double> b) {
+  /// Calculate cosine similarity between two embeddings (static for isolate use)
+  static double cosineSimilarity(List<double> a, List<double> b) {
     if (a.length != b.length) return 0.0;
     
     double dotProduct = 0.0;
@@ -173,39 +175,64 @@ class EmbeddingService {
   }
   
   /// Find related facts based on embedding similarity
-  List<RelatedFact> findRelatedFacts(
+  /// Runs heavy computation in background isolate on non-web platforms
+  Future<List<RelatedFact>> findRelatedFacts(
     Fact targetFact,
     List<Fact> allFacts, {
     int limit = 5,
     double threshold = similarityThreshold,
-  }) {
+  }) async {
     if (targetFact.embedding == null) return [];
     
+    // Use compute() on non-web platforms for background processing
+    if (!kIsWeb) {
+      return compute(
+        _findRelatedFactsIsolate,
+        _FindRelatedFactsParams(
+          targetEmbedding: targetFact.embedding!,
+          targetId: targetFact.id,
+          factsData: allFacts
+              .where((f) => f.embedding != null && f.id != targetFact.id)
+              .map((f) => _FactEmbeddingData(id: f.id, embedding: f.embedding!, fact: f))
+              .toList(),
+          limit: limit,
+          threshold: threshold,
+        ),
+      );
+    }
+    
+    // Fallback for web (no isolate support)
+    return _findRelatedFactsSync(
+      targetFact.embedding!,
+      targetFact.id,
+      allFacts,
+      limit,
+      threshold,
+    );
+  }
+  
+  /// Synchronous version for web fallback
+  List<RelatedFact> _findRelatedFactsSync(
+    List<double> targetEmbedding,
+    String targetId,
+    List<Fact> allFacts,
+    int limit,
+    double threshold,
+  ) {
     final results = <RelatedFact>[];
     
     for (final fact in allFacts) {
-      // Skip self
-      if (fact.id == targetFact.id) continue;
-      // Skip facts without embeddings
+      if (fact.id == targetId) continue;
       if (fact.embedding == null) continue;
       
-      final similarity = cosineSimilarity(
-        targetFact.embedding!,
-        fact.embedding!,
-      );
+      final similarity = cosineSimilarity(targetEmbedding, fact.embedding!);
       
       if (similarity >= threshold) {
-        results.add(RelatedFact(
-          fact: fact,
-          similarity: similarity,
-        ));
+        results.add(RelatedFact(fact: fact, similarity: similarity));
       }
     }
     
-    // Sort by similarity descending
     results.sort((a, b) => b.similarity.compareTo(a.similarity));
-    
-    // Return top N
     return results.take(limit).toList();
   }
   
@@ -213,6 +240,55 @@ class EmbeddingService {
   List<Fact> findFactsWithoutEmbeddings(List<Fact> facts) {
     return facts.where((f) => f.embedding == null).toList();
   }
+}
+
+/// Top-level function for compute() isolate
+List<RelatedFact> _findRelatedFactsIsolate(_FindRelatedFactsParams params) {
+  final results = <RelatedFact>[];
+  
+  for (final factData in params.factsData) {
+    final similarity = EmbeddingService.cosineSimilarity(
+      params.targetEmbedding,
+      factData.embedding,
+    );
+    
+    if (similarity >= params.threshold) {
+      results.add(RelatedFact(fact: factData.fact, similarity: similarity));
+    }
+  }
+  
+  results.sort((a, b) => b.similarity.compareTo(a.similarity));
+  return results.take(params.limit).toList();
+}
+
+/// Parameters for isolate function
+class _FindRelatedFactsParams {
+  final List<double> targetEmbedding;
+  final String targetId;
+  final List<_FactEmbeddingData> factsData;
+  final int limit;
+  final double threshold;
+  
+  _FindRelatedFactsParams({
+    required this.targetEmbedding,
+    required this.targetId,
+    required this.factsData,
+    required this.limit,
+    required this.threshold,
+  });
+}
+
+/// Lightweight data class for passing to isolate
+class _FactEmbeddingData {
+  final String id;
+  final List<double> embedding;
+  final Fact fact;
+  
+  _FactEmbeddingData({
+    required this.id,
+    required this.embedding,
+    required this.fact,
+  });
 }
 
 /// A fact with its similarity score

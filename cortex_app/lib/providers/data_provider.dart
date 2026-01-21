@@ -13,9 +13,16 @@ class DataProvider extends ChangeNotifier {
   final Uuid _uuid = const Uuid();
   late final LinkService _linkService;
 
-  List<Source> _sources = [];
-  List<Fact> _facts = [];
-  List<FactLink> _factLinks = [];
+  // Use Maps for O(1) lookups instead of Lists
+  final Map<String, Source> _sourcesMap = {};
+  final Map<String, Fact> _factsMap = {};
+  final Map<String, FactLink> _factLinksMap = {};
+  
+  // Cached computed values (invalidated on data changes)
+  List<String>? _cachedSubjects;
+  List<Fact>? _cachedDueFacts;
+  DateTime? _dueFactsCacheTime;
+  
   bool _isLoading = true;
   bool _isSyncing = false;
 
@@ -26,11 +33,16 @@ class DataProvider extends ChangeNotifier {
     _linkService = LinkService(_storage);
   }
 
-  List<Source> get sources => _sources;
-  List<Fact> get facts => _facts;
-  List<FactLink> get factLinks => _factLinks;
+  // Public getters return lists from maps
+  List<Source> get sources => _sourcesMap.values.toList();
+  List<Fact> get facts => _factsMap.values.toList();
+  List<FactLink> get factLinks => _factLinksMap.values.toList();
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;
+  
+  // O(1) lookups
+  Fact? getFactById(String id) => _factsMap[id];
+  Source? getSourceById(String id) => _sourcesMap[id];
 
   /// Initialize and load all data
   Future<void> init() async {
@@ -50,6 +62,13 @@ class DataProvider extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+  
+  /// Invalidate cached values when data changes
+  void _invalidateCaches() {
+    _cachedSubjects = null;
+    _cachedDueFacts = null;
+    _dueFactsCacheTime = null;
   }
 
   /// Start Firebase real-time listeners
@@ -100,18 +119,17 @@ class DataProvider extends ChangeNotifier {
     bool hasChanges = false;
 
     for (final firebaseSource in firebaseSources) {
-      final localIndex = _sources.indexWhere((s) => s.id == firebaseSource.id);
+      final localSource = _sourcesMap[firebaseSource.id];
 
-      if (localIndex == -1) {
+      if (localSource == null) {
         // New source from Firebase - add it locally
-        _sources.add(firebaseSource);
+        _sourcesMap[firebaseSource.id] = firebaseSource;
         _storage.saveSource(firebaseSource);
         hasChanges = true;
       } else {
         // Source exists - update if Firebase version is newer
-        final localSource = _sources[localIndex];
         if (firebaseSource.updatedAt.isAfter(localSource.updatedAt)) {
-          _sources[localIndex] = firebaseSource;
+          _sourcesMap[firebaseSource.id] = firebaseSource;
           _storage.saveSource(firebaseSource);
           hasChanges = true;
         }
@@ -129,34 +147,34 @@ class DataProvider extends ChangeNotifier {
     final firebaseIds = firebaseFacts.map((f) => f.id).toSet();
 
     // Remove local facts that no longer exist in Firebase
-    final factsToRemove = _facts.where((f) => !firebaseIds.contains(f.id)).toList();
-    for (final fact in factsToRemove) {
-      _facts.removeWhere((f) => f.id == fact.id);
-      await _storage.deleteFact(fact.id);
+    final idsToRemove = _factsMap.keys.where((id) => !firebaseIds.contains(id)).toList();
+    for (final id in idsToRemove) {
+      _factsMap.remove(id);
+      await _storage.deleteFact(id);
       // Remove associated links
-      final linksToRemove = _factLinks.where((l) => 
-        l.sourceFactId == fact.id || l.targetFactId == fact.id
-      ).toList();
-      for (final link in linksToRemove) {
-        _factLinks.removeWhere((l) => l.id == link.id);
-        await _storage.deleteFactLink(link.id);
+      final linkIdsToRemove = _factLinksMap.entries
+          .where((e) => e.value.sourceFactId == id || e.value.targetFactId == id)
+          .map((e) => e.key)
+          .toList();
+      for (final linkId in linkIdsToRemove) {
+        _factLinksMap.remove(linkId);
+        await _storage.deleteFactLink(linkId);
       }
       hasChanges = true;
     }
 
     for (final firebaseFact in firebaseFacts) {
-      final localIndex = _facts.indexWhere((f) => f.id == firebaseFact.id);
+      final localFact = _factsMap[firebaseFact.id];
 
-      if (localIndex == -1) {
+      if (localFact == null) {
         // New fact from Firebase - add it locally
-        _facts.add(firebaseFact);
+        _factsMap[firebaseFact.id] = firebaseFact;
         _storage.saveFact(firebaseFact);
         hasChanges = true;
       } else {
         // Fact exists - update if Firebase version is newer
-        final localFact = _facts[localIndex];
         if (firebaseFact.updatedAt.isAfter(localFact.updatedAt)) {
-          _facts[localIndex] = firebaseFact;
+          _factsMap[firebaseFact.id] = firebaseFact;
           _storage.saveFact(firebaseFact);
           hasChanges = true;
         }
@@ -164,6 +182,7 @@ class DataProvider extends ChangeNotifier {
     }
 
     if (hasChanges) {
+      _invalidateCaches();
       // Refresh links when facts change
       await refreshAllLinks();
       notifyListeners();
@@ -171,19 +190,29 @@ class DataProvider extends ChangeNotifier {
   }
 
   Future<void> _loadData() async {
-    _sources = await _storage.getAllSources();
-    _facts = await _storage.getAllFacts();
-    _factLinks = await _storage.getAllFactLinks();
+    final sources = await _storage.getAllSources();
+    final facts = await _storage.getAllFacts();
+    final links = await _storage.getAllFactLinks();
+    
+    _sourcesMap.clear();
+    _factsMap.clear();
+    _factLinksMap.clear();
+    
+    for (final s in sources) { _sourcesMap[s.id] = s; }
+    for (final f in facts) { _factsMap[f.id] = f; }
+    for (final l in links) { _factLinksMap[l.id] = l; }
+    
+    _invalidateCaches();
   }
 
-  /// Get facts for a specific source
+  /// Get facts for a specific source (cached internally)
   List<Fact> getFactsForSource(String sourceId) {
-    return _facts.where((f) => f.sourceId == sourceId).toList();
+    return _factsMap.values.where((f) => f.sourceId == sourceId).toList();
   }
 
   /// Get fact count for a source
   int getFactCountForSource(String sourceId) {
-    return _facts.where((f) => f.sourceId == sourceId).length;
+    return _factsMap.values.where((f) => f.sourceId == sourceId).length;
   }
 
   /// Add a new source
@@ -195,7 +224,7 @@ class DataProvider extends ChangeNotifier {
 
     // Save locally
     await _storage.saveSource(source);
-    _sources.add(source);
+    _sourcesMap[source.id] = source;
 
     // Sync to Firebase if signed in
     if (FirebaseService.isSignedIn) {
@@ -229,7 +258,8 @@ class DataProvider extends ChangeNotifier {
 
     // Save locally
     await _storage.saveFact(fact);
-    _facts.add(fact);
+    _factsMap[fact.id] = fact;
+    _invalidateCaches();
 
     // Create links for this fact
     await _updateLinksForFact(fact);
@@ -251,10 +281,8 @@ class DataProvider extends ChangeNotifier {
   Future<void> updateFact(Fact fact) async {
     // Update locally
     await _storage.saveFact(fact);
-    final index = _facts.indexWhere((f) => f.id == fact.id);
-    if (index != -1) {
-      _facts[index] = fact;
-    }
+    _factsMap[fact.id] = fact;
+    _invalidateCaches();
 
     // Update links for this fact
     await _updateLinksForFact(fact);
@@ -281,14 +309,14 @@ class DataProvider extends ChangeNotifier {
     // Create new links
     final newLinks = await _linkService.createLinksForFact(
       fact,
-      _facts,
-      _factLinks,
+      _factsMap.values.toList(),
+      _factLinksMap.values.toList(),
     );
 
     // Save new links
     for (final link in newLinks) {
       await _storage.saveFactLink(link);
-      _factLinks.add(link);
+      _factLinksMap[link.id] = link;
       debugPrint(
         'Created link: ${link.sourceFactId} -> ${link.targetFactId} ("${link.linkText}")',
       );
@@ -301,21 +329,21 @@ class DataProvider extends ChangeNotifier {
 
   /// Refresh links for all facts
   Future<void> refreshAllLinks() async {
-    debugPrint('Refreshing links for ${_facts.length} facts...');
+    debugPrint('Refreshing links for ${_factsMap.length} facts...');
 
     // Clear existing links
-    _factLinks.clear();
+    _factLinksMap.clear();
     final allLinks = await _storage.getAllFactLinks();
     for (final link in allLinks) {
       await _storage.deleteFactLink(link.id);
     }
 
     // Recreate links for all facts
-    for (final fact in _facts) {
+    for (final fact in _factsMap.values) {
       await _updateLinksForFact(fact);
     }
 
-    debugPrint('Link refresh complete. Total links: ${_factLinks.length}');
+    debugPrint('Link refresh complete. Total links: ${_factLinksMap.length}');
     notifyListeners();
   }
 
@@ -323,10 +351,7 @@ class DataProvider extends ChangeNotifier {
   Future<void> updateSource(Source source) async {
     // Update locally
     await _storage.saveSource(source);
-    final index = _sources.indexWhere((s) => s.id == source.id);
-    if (index != -1) {
-      _sources[index] = source;
-    }
+    _sourcesMap[source.id] = source;
 
     // Sync to Firebase if signed in
     if (FirebaseService.isSignedIn) {
@@ -344,11 +369,14 @@ class DataProvider extends ChangeNotifier {
   Future<void> deleteSource(String sourceId) async {
     // Delete locally
     await _storage.deleteSource(sourceId);
-    _sources.removeWhere((s) => s.id == sourceId);
+    _sourcesMap.remove(sourceId);
 
     // Get facts to delete
-    final factsToDelete = _facts.where((f) => f.sourceId == sourceId).toList();
-    _facts.removeWhere((f) => f.sourceId == sourceId);
+    final factsToDelete = _factsMap.values.where((f) => f.sourceId == sourceId).toList();
+    for (final fact in factsToDelete) {
+      _factsMap.remove(fact.id);
+    }
+    _invalidateCaches();
 
     // Sync to Firebase if signed in
     if (FirebaseService.isSignedIn) {
@@ -370,16 +398,18 @@ class DataProvider extends ChangeNotifier {
   Future<void> deleteFact(String factId) async {
     // Delete locally
     await _storage.deleteFact(factId);
-    _facts.removeWhere((f) => f.id == factId);
+    _factsMap.remove(factId);
+    _invalidateCaches();
 
     // Delete associated links
-    final linksToDelete = _factLinks.where((link) {
-      return link.sourceFactId == factId || link.targetFactId == factId;
-    }).toList();
+    final linkIdsToDelete = _factLinksMap.entries
+        .where((e) => e.value.sourceFactId == factId || e.value.targetFactId == factId)
+        .map((e) => e.key)
+        .toList();
 
-    for (final link in linksToDelete) {
-      await _storage.deleteFactLink(link.id);
-      _factLinks.removeWhere((l) => l.id == link.id);
+    for (final linkId in linkIdsToDelete) {
+      await _storage.deleteFactLink(linkId);
+      _factLinksMap.remove(linkId);
     }
 
     // Sync to Firebase if signed in
@@ -394,22 +424,34 @@ class DataProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Get all unique subjects
+  /// Get all unique subjects (cached)
   List<String> get allSubjects {
+    if (_cachedSubjects != null) return _cachedSubjects!;
+    
     final subjects = <String>{};
-    for (final fact in _facts) {
+    for (final fact in _factsMap.values) {
       subjects.addAll(fact.subjects);
     }
-    return subjects.toList()..sort();
+    _cachedSubjects = subjects.toList()..sort();
+    return _cachedSubjects!;
   }
 
-  /// Get facts due for review (unshuffled)
+  /// Get facts due for review (cached for 1 second to avoid recalculation)
   List<Fact> get dueFacts {
     final now = DateTime.now();
-    return _facts.where((f) {
+    // Invalidate cache if older than 1 second
+    if (_cachedDueFacts != null && 
+        _dueFactsCacheTime != null &&
+        now.difference(_dueFactsCacheTime!).inSeconds < 1) {
+      return _cachedDueFacts!;
+    }
+    
+    _cachedDueFacts = _factsMap.values.where((f) {
       if (f.nextReviewAt == null) return true;
       return now.isAfter(f.nextReviewAt!);
     }).toList();
+    _dueFactsCacheTime = now;
+    return _cachedDueFacts!;
   }
 
   /// Get facts due for review (shuffled)
@@ -421,7 +463,7 @@ class DataProvider extends ChangeNotifier {
 
   /// Get all facts shuffled (for random browse mode)
   List<Fact> get allFactsShuffled {
-    final shuffled = List<Fact>.from(_facts);
+    final shuffled = List<Fact>.from(_factsMap.values);
     shuffled.shuffle();
     return shuffled;
   }

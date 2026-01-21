@@ -10,23 +10,12 @@ import 'screens/graph_screen.dart';
 import 'screens/collections_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/auth_screen.dart';
+import 'screens/splash_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize Firebase
-  await FirebaseService.init();
-
-  // Initialize local storage
-  final storage = HiveStorageService();
-  await storage.init();
-
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => DataProvider(storage)..init(),
-      child: const CortexApp(),
-    ),
-  );
+  // Run app immediately - initialization happens in background
+  runApp(const CortexApp());
 }
 
 class CortexApp extends StatefulWidget {
@@ -39,63 +28,49 @@ class CortexApp extends StatefulWidget {
 class _CortexAppState extends State<CortexApp> {
   ThemeMode _themeMode = ThemeMode.system;
   bool _showAuth = true;
-  bool _isCheckingAuth = true;
+  bool _isInitializing = true;
+  
+  late final HiveStorageService _storage;
+  late final DataProvider _dataProvider;
+
 
   @override
   void initState() {
     super.initState();
-    _checkAuthState();
+    _initializeApp();
+  }
 
-    // Listen to auth changes
+  Future<void> _initializeApp() async {
+    // Initialize services in background
+    await FirebaseService.init();
+    
+    _storage = HiveStorageService();
+    await _storage.init();
+    
+    _dataProvider = DataProvider(_storage);
+    await _dataProvider.init();
+    
+    // Check auth state
+    _showAuth = !FirebaseService.isSignedIn;
+    
+    // If signed in, start Firebase listeners
+    if (FirebaseService.isSignedIn) {
+      _dataProvider.startFirebaseListeners();
+    }
+    
+    // Listen to future auth changes
     FirebaseService.authStateChanges.listen((user) {
+      if (!mounted) return;
       if (user != null) {
         setState(() => _showAuth = false);
-        // Use post-frame callback to access context safely
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _onUserSignedIn();
-        });
+        _dataProvider.startFirebaseListeners();
       } else {
         setState(() => _showAuth = true);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _onUserSignedOut();
-        });
+        _dataProvider.stopFirebaseListeners();
       }
     });
-  }
-
-  void _checkAuthState() {
-    setState(() {
-      _showAuth = !FirebaseService.isSignedIn;
-      _isCheckingAuth = false;
-    });
-
-    // If signed in, start listening to Firebase (use post-frame callback)
-    if (FirebaseService.isSignedIn) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _onUserSignedIn();
-      });
-    }
-  }
-
-  void _onUserSignedIn() {
-    debugPrint('User signed in: ${FirebaseService.currentUser?.email}');
-    debugPrint('User ID: ${FirebaseService.userId}');
-
-    // Start Firebase real-time listeners in DataProvider
-    if (mounted) {
-      final dataProvider = Provider.of<DataProvider>(context, listen: false);
-      dataProvider.startFirebaseListeners();
-    }
-  }
-
-  void _onUserSignedOut() {
-    debugPrint('User signed out');
-
-    // Stop Firebase listeners
-    if (mounted) {
-      final dataProvider = Provider.of<DataProvider>(context, listen: false);
-      dataProvider.stopFirebaseListeners();
-    }
+    
+    setState(() => _isInitializing = false);
   }
 
   void _toggleTheme() {
@@ -112,20 +87,34 @@ class _CortexAppState extends State<CortexApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Cortex',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: _themeMode,
-      home: _isCheckingAuth
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : _showAuth
-          ? AuthScreen(onSignedIn: () => setState(() => _showAuth = false))
-          : MainNavigation(
-              isDarkMode: _isDarkMode,
-              onToggleTheme: _toggleTheme,
-            ),
+    // Show splash while initializing
+    if (_isInitializing) {
+      return MaterialApp(
+        title: 'Cortex',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: _themeMode,
+        home: const SplashScreen(),
+      );
+    }
+    
+    // Wrap with Provider once DataProvider is ready
+    return ChangeNotifierProvider.value(
+      value: _dataProvider,
+      child: MaterialApp(
+        title: 'Cortex',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: _themeMode,
+        home: _showAuth
+            ? AuthScreen(onSignedIn: () => setState(() => _showAuth = false))
+            : MainNavigation(
+                isDarkMode: _isDarkMode,
+                onToggleTheme: _toggleTheme,
+              ),
+      ),
     );
   }
 }
