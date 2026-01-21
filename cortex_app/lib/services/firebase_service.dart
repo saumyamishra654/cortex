@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/source.dart' as models;
+import '../models/smart_collection.dart';
 import '../models/fact.dart';
 import '../firebase_options.dart';
 
@@ -78,6 +79,9 @@ class FirebaseService {
 
   static CollectionReference<Map<String, dynamic>> get _factsCollection =>
       _firestore.collection('users').doc(userId).collection('facts');
+
+  static CollectionReference<Map<String, dynamic>> get _collectionsCollection =>
+      _firestore.collection('users').doc(userId).collection('collections');
 
   // ============ SOURCES ============
 
@@ -193,6 +197,33 @@ class FirebaseService {
     if (!isSignedIn) return;
 
     await _factsCollection.doc(id).delete();
+  }
+
+  // ============ COLLECTIONS ============
+
+  /// Fetch all collections for current user
+  static Future<List<Map<String, dynamic>>> getCollections() async {
+    if (!isSignedIn) return [];
+
+    final snapshot = await _collectionsCollection
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    return snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList();
+  }
+
+  /// Create or update a collection
+  static Future<void> createCollection(SmartCollection collection) async {
+    if (!isSignedIn) return;
+
+    await _collectionsCollection.doc(collection.id).set(collection.toJson());
+  }
+
+  /// Delete a collection
+  static Future<void> deleteCollection(String id) async {
+    if (!isSignedIn) return;
+
+    await _collectionsCollection.doc(id).delete();
   }
 
   // ============ SYNC ============
@@ -373,5 +404,26 @@ class FirebaseService {
         );
       }).toList();
     });
+  }
+
+  /// Real-time listener for collections
+  static Stream<List<SmartCollection>> collectionsStream() {
+    if (!isSignedIn) {
+      return Stream.value([]);
+    }
+
+    return _collectionsCollection
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          debugPrint(
+            '[FirebaseService] collectionsStream: Received ${snapshot.docs.length} collections',
+          );
+          return snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id; // Ensure ID is present
+            return SmartCollection.fromJson(data);
+          }).toList();
+        });
   }
 }

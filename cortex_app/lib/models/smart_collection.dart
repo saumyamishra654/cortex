@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 part 'smart_collection.g.dart';
 
@@ -113,6 +114,29 @@ class CollectionFilter {
         return 'is in';
     }
   }
+
+
+  factory CollectionFilter.fromJson(Map<String, dynamic> json) {
+    return CollectionFilter(
+      field: FilterField.values.firstWhere(
+        (e) => e.name == json['field'],
+        orElse: () => FilterField.content,
+      ),
+      operator: FilterOperator.values.firstWhere(
+        (e) => e.name == json['operator'],
+        orElse: () => FilterOperator.contains,
+      ),
+      value: json['value'] ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'field': field.name,
+      'operator': operator.name,
+      'value': value,
+    };
+  }
 }
 
 /// A smart collection with dynamic filters
@@ -204,4 +228,48 @@ class SmartCollection extends HiveObject {
       dynamicParams: params,
     );
   }
+
+  /// Create from JSON (for Firestore)
+  factory SmartCollection.fromJson(Map<String, dynamic> json) {
+    return SmartCollection(
+      id: json['id'],
+      name: json['name'],
+      icon: json['icon'] ?? 'folder',
+      filters: (json['filters'] as List<dynamic>?)
+              ?.map((e) => CollectionFilter.fromJson(e))
+              .toList() ??
+          [],
+      sortField: SortField.values.firstWhere(
+        (e) => e.name == json['sortField'],
+        orElse: () => SortField.createdAt,
+      ),
+      sortDescending: json['sortDescending'] ?? true,
+      createdAt: json['createdAt'] != null
+          ? (json['createdAt'] as Timestamp).toDate()
+          : DateTime.now(),
+      isBuiltIn: json['isBuiltIn'] ?? false,
+      type: CollectionType.values.firstWhere(
+        (e) => e.name == json['type'],
+        orElse: () => CollectionType.manual,
+      ),
+      dynamicParams: Map<String, String>.from(json['dynamicParams'] ?? {}),
+    );
+  }
+
+  /// Convert to JSON (for Firestore)
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'icon': icon,
+      'filters': filters.map((e) => e.toJson()).toList(),
+      'sortField': sortField.name,
+      'sortDescending': sortDescending,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'isBuiltIn': isBuiltIn,
+      'type': type.name,
+      'dynamicParams': dynamicParams,
+    };
+  }
 }
+

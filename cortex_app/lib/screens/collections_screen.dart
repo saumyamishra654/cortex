@@ -67,7 +67,7 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
         title: const Text('Library'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: theme.colorScheme.secondary),
             onPressed: () {
               _loadDynamicCollections();
               ScaffoldMessenger.of(context).showSnackBar(

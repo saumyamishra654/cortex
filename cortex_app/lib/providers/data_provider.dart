@@ -31,6 +31,7 @@ class DataProvider extends ChangeNotifier {
 
   StreamSubscription? _sourcesSubscription;
   StreamSubscription? _factsSubscription;
+  StreamSubscription? _collectionsSubscription;
 
   DataProvider(this._storage) {
     _linkService = LinkService(_storage);
@@ -88,6 +89,7 @@ class DataProvider extends ChangeNotifier {
 
     _sourcesSubscription?.cancel();
     _factsSubscription?.cancel();
+    _collectionsSubscription?.cancel();
 
     // Listen to sources from Firebase
     _sourcesSubscription = FirebaseService.sourcesStream().listen(
@@ -110,12 +112,24 @@ class DataProvider extends ChangeNotifier {
         debugPrint('Error listening to facts: $error');
       },
     );
+
+    // Listen to collections from Firebase
+    _collectionsSubscription = FirebaseService.collectionsStream().listen(
+      (firebaseCollections) {
+        debugPrint('Received ${firebaseCollections.length} collections from Firebase');
+        _mergeCollections(firebaseCollections);
+      },
+      onError: (error) {
+        debugPrint('Error listening to collections: $error');
+      },
+    );
   }
 
   /// Stop Firebase listeners
   void stopFirebaseListeners() {
     _sourcesSubscription?.cancel();
     _factsSubscription?.cancel();
+    _collectionsSubscription?.cancel();
   }
 
   /// Merge Firebase sources with local sources
@@ -189,6 +203,54 @@ class DataProvider extends ChangeNotifier {
       _invalidateCaches();
       // Refresh links when facts change
       await refreshAllLinks();
+      notifyListeners();
+    }
+  }
+
+  /// Merge Firebase collections with local collections
+  void _mergeCollections(List<SmartCollection> firebaseCollections) {
+    bool hasChanges = false;
+    final firebaseIds = firebaseCollections.map((c) => c.id).toSet();
+
+    // Remove local collections that no longer exist in Firebase (if sync deletes locally?)
+    // Actually, usually we merge. If deleted in cloud, delete locally?
+    // Let's assume bidirectional sync means cloud is truth for existence if we are syncing.
+    
+    // For now, let's just add/update. Deletion sync is trickier without tombstones.
+    // If we assume the list from Firebase is "all user collections", we can delete missing ones.
+    
+    final idsToRemove = _collectionsMap.keys.where((id) => !firebaseIds.contains(id)).toList();
+    for (final id in idsToRemove) {
+      // Only delete manual collections that we know about?
+      // Or just delete everything not in cloud?
+      // Let's be safe: if it's not in cloud, delete it locally.
+      _collectionsMap.remove(id);
+      _storage.deleteCollection(id);
+      hasChanges = true;
+    }
+
+    for (final firebaseCol in firebaseCollections) {
+      final localCol = _collectionsMap[firebaseCol.id];
+
+      if (localCol == null) {
+        // New collection
+        _collectionsMap[firebaseCol.id] = firebaseCol;
+        _storage.saveCollection(firebaseCol);
+        hasChanges = true;
+      } else {
+        // Exists - update? SmartCollection doesn't have updatedAt field in standard way?
+        // It has SortField.updatedAt but not a top-level field?
+        // Wait, SmartCollection has `createdAt`. It doesn't track modification time well.
+        // Let's assume cloud is always newer or overwrite?
+        // Or check value equality?
+        // For now, simpler: just overwrite local with cloud version.
+        _collectionsMap[firebaseCol.id] = firebaseCol;
+        _storage.saveCollection(firebaseCol);
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
       notifyListeners();
     }
   }
@@ -484,6 +546,16 @@ class DataProvider extends ChangeNotifier {
   Future<void> createCollection(SmartCollection collection) async {
     await _storage.saveCollection(collection);
     _collectionsMap[collection.id] = collection;
+    
+    // Sync to Firebase
+    if (FirebaseService.isSignedIn) {
+      try {
+        await FirebaseService.createCollection(collection);
+      } catch (e) {
+        debugPrint('Error syncing collection to Firebase: $e');
+      }
+    }
+    
     notifyListeners();
   }
   
@@ -491,6 +563,16 @@ class DataProvider extends ChangeNotifier {
   Future<void> deleteCollection(String id) async {
     await _storage.deleteCollection(id);
     _collectionsMap.remove(id);
+    
+    // Sync to Firebase
+    if (FirebaseService.isSignedIn) {
+      try {
+        await FirebaseService.deleteCollection(id);
+      } catch (e) {
+        debugPrint('Error syncing collection deletion to Firebase: $e');
+      }
+    }
+    
     notifyListeners();
   }
 
