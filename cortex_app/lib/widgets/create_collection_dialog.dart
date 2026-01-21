@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/smart_collection.dart';
+import '../models/source.dart';
 import '../providers/data_provider.dart';
 import '../services/collection_service.dart';
 
@@ -18,6 +19,7 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
   
   // Multi-select state
   List<String> _selectedSources = [];
+  List<String> _selectedSourceTypes = [];
   List<String> _selectedTags = [];
   
   SortField _sortField = SortField.createdAt;
@@ -27,6 +29,23 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+  
+  String _getTypeLabel(SourceType type) {
+    switch (type) {
+      case SourceType.book: return 'Book';
+      case SourceType.article: return 'Article';
+      case SourceType.podcast: return 'Podcast';
+      case SourceType.video: return 'Video';
+      case SourceType.conversation: return 'Conversation';
+      case SourceType.course: return 'Course';
+      case SourceType.other: return 'Other';
+      case SourceType.research_paper: return 'Research Paper';
+      case SourceType.audiobook: return 'Audiobook';
+      case SourceType.reels: return 'Reels / Shorts';
+      case SourceType.social_post: return 'Social Post';
+      case SourceType.document: return 'Document';
+    }
   }
   
   @override
@@ -40,6 +59,7 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
       provider.facts, 
       previewFilters, 
       provider.factLinks,
+      {for (var s in provider.sources) s.id: s},
     );
 
     return Dialog(
@@ -86,6 +106,16 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
                 items: provider.sources.map((s) => MapEntry(s.id, s.name)).toList(),
                 selectedValues: _selectedSources,
                 onChanged: (values) => setState(() => _selectedSources = values),
+              ),
+              const SizedBox(height: 12),
+
+              // Source Type Multi-Selector
+              _buildMultiSelectTile(
+                context,
+                label: 'Source Types',
+                items: SourceType.values.map((t) => MapEntry(t.name, _getTypeLabel(t))).toList(),
+                selectedValues: _selectedSourceTypes,
+                onChanged: (values) => setState(() => _selectedSourceTypes = values),
               ),
               const SizedBox(height: 12),
               
@@ -250,6 +280,14 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
         field: FilterField.source,
         operator: FilterOperator.isIn,
         value: _selectedSources.join(','),
+      ));
+    }
+
+    if (_selectedSourceTypes.isNotEmpty) {
+      filters.add(CollectionFilter(
+        field: FilterField.sourceType,
+        operator: FilterOperator.isIn,
+        value: _selectedSourceTypes.join(','),
       ));
     }
     

@@ -1,3 +1,4 @@
+import '../models/source.dart';
 import '../models/fact.dart';
 import '../models/fact_link.dart';
 import '../models/smart_collection.dart';
@@ -64,11 +65,12 @@ class CollectionService {
     List<Fact> facts,
     List<CollectionFilter> filters,
     List<FactLink> allLinks,
+    Map<String, Source> sources,
   ) {
     var results = List<Fact>.from(facts);
     
     for (final filter in filters) {
-      results = results.where((fact) => _matchesFilter(fact, filter, allLinks)).toList();
+      results = results.where((fact) => _matchesFilter(fact, filter, allLinks, sources)).toList();
     }
     
     return results;
@@ -114,14 +116,29 @@ class CollectionService {
     SmartCollection collection,
     List<Fact> allFacts,
     List<FactLink> allLinks,
+    Map<String, Source> sources,
   ) {
-    var results = executeFilters(allFacts, collection.filters, allLinks);
+    var results = executeFilters(allFacts, collection.filters, allLinks, sources);
     results = sortFacts(results, collection.sortField, collection.sortDescending, allLinks);
     return results;
   }
   
-  bool _matchesFilter(Fact fact, CollectionFilter filter, List<FactLink> allLinks) {
+  bool _matchesFilter(
+    Fact fact, 
+    CollectionFilter filter, 
+    List<FactLink> allLinks, 
+    Map<String, Source> sources
+  ) {
     switch (filter.field) {
+      case FilterField.sourceType:
+        final source = sources[fact.sourceId];
+        if (source == null) return false;
+        if (filter.operator == FilterOperator.isIn) {
+          final types = filter.value.split(',');
+          return types.contains(source.type.name);
+        }
+        return _matchString(source.type.name, filter.operator, filter.value);
+
       case FilterField.source:
         if (filter.operator == FilterOperator.isIn) {
           final sources = filter.value.split(',');

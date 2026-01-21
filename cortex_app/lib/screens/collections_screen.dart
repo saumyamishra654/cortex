@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/smart_collection.dart';
+import '../models/source.dart';
 
 import '../providers/data_provider.dart';
 import '../services/collection_service.dart';
@@ -216,7 +217,8 @@ class _CollectionsScreenState extends State<CollectionsScreen> {
     final facts = _collectionService.executeCollection(
       collection, 
       provider.facts, 
-      provider.factLinks
+      provider.factLinks,
+      {for (var s in provider.sources) s.id: s},
     );
 
     return Scaffold(

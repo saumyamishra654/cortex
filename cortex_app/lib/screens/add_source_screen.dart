@@ -116,6 +116,16 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
         return 'Course';
       case SourceType.other:
         return 'Other';
+      case SourceType.research_paper:
+        return 'Research Paper';
+      case SourceType.audiobook:
+        return 'Audiobook';
+      case SourceType.reels:
+        return 'Reels / Shorts';
+      case SourceType.social_post:
+        return 'Social Post';
+      case SourceType.document:
+        return 'Document';
     }
   }
 
@@ -135,6 +145,16 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
         return Icons.school_rounded;
       case SourceType.other:
         return Icons.folder_rounded;
+      case SourceType.research_paper:
+        return Icons.science_rounded;
+      case SourceType.audiobook:
+        return Icons.headphones_rounded;
+      case SourceType.reels:
+        return Icons.smartphone_rounded;
+      case SourceType.social_post:
+        return Icons.public_rounded;
+      case SourceType.document:
+        return Icons.description_rounded;
     }
   }
 

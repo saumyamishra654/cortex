@@ -19,6 +19,16 @@ enum SourceType {
   course,
   @HiveField(6)
   other,
+  @HiveField(7)
+  research_paper,
+  @HiveField(8)
+  audiobook,
+  @HiveField(9)
+  reels,
+  @HiveField(10)
+  social_post,
+  @HiveField(11)
+  document,
 }
 
 /// A source/container for facts (book, podcast, article, etc.)
@@ -86,6 +96,16 @@ class Source extends HiveObject {
         return 'school';
       case SourceType.other:
         return 'folder';
+      case SourceType.research_paper:
+        return 'science';
+      case SourceType.audiobook:
+        return 'headphones';
+      case SourceType.reels:
+        return 'smartphone';
+      case SourceType.social_post:
+        return 'public';
+      case SourceType.document:
+        return 'description';
     }
   }
 
@@ -106,6 +126,16 @@ class Source extends HiveObject {
         return 'Course';
       case SourceType.other:
         return 'Other';
+      case SourceType.research_paper:
+        return 'Research Paper';
+      case SourceType.audiobook:
+        return 'Audiobook';
+      case SourceType.reels:
+        return 'Reels / Shorts';
+      case SourceType.social_post:
+        return 'Social Post';
+      case SourceType.document:
+        return 'Document';
     }
   }
 }

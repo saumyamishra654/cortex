@@ -33,6 +33,16 @@ class SourceCard extends StatelessWidget {
         return Icons.school_rounded;
       case SourceType.other:
         return Icons.folder_rounded;
+      case SourceType.research_paper:
+        return Icons.science_rounded;
+      case SourceType.audiobook:
+        return Icons.headphones_rounded;
+      case SourceType.reels:
+        return Icons.smartphone_rounded;
+      case SourceType.social_post:
+        return Icons.public_rounded;
+      case SourceType.document:
+        return Icons.description_rounded;
     }
   }
 

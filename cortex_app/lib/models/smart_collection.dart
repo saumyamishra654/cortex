@@ -22,6 +22,8 @@ enum FilterField {
   content,
   @HiveField(7)
   id,
+  @HiveField(8)
+  sourceType,
 }
 
 /// Filter operator options
