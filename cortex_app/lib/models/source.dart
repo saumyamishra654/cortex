@@ -39,12 +39,16 @@ class Source extends HiveObject {
   @HiveField(4)
   DateTime updatedAt;
 
+  @HiveField(5)
+  String? url;
+
   Source({
     required this.id,
     required this.name,
     required this.type,
     required this.createdAt,
     required this.updatedAt,
+    this.url,
   });
 
   /// Create a new source with auto-generated timestamps
@@ -52,6 +56,7 @@ class Source extends HiveObject {
     required String id,
     required String name,
     required SourceType type,
+    String? url,
   }) {
     final now = DateTime.now();
     return Source(
@@ -60,6 +65,7 @@ class Source extends HiveObject {
       type: type,
       createdAt: now,
       updatedAt: now,
+      url: url,
     );
   }
 

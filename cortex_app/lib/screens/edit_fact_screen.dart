@@ -216,6 +216,11 @@ class _EditFactScreenState extends State<EditFactScreen> {
 
   void _save() async {
     if (_formKey.currentState!.validate()) {
+      // Check if content or subjects changed - invalidate embedding if so
+      final contentChanged = _contentController.text.trim() != widget.fact.content;
+      final subjectsChanged = !_listEquals(_selectedSubjects, widget.fact.subjects);
+      final shouldClearEmbedding = contentChanged || subjectsChanged;
+      
       final updatedFact = Fact(
         id: widget.fact.id,
         content: _contentController.text.trim(),
@@ -230,7 +235,8 @@ class _EditFactScreenState extends State<EditFactScreen> {
         easeFactor: widget.fact.easeFactor,
         interval: widget.fact.interval,
         nextReviewAt: widget.fact.nextReviewAt,
-        embedding: widget.fact.embedding,
+        // Clear embedding if content or subjects changed
+        embedding: shouldClearEmbedding ? null : widget.fact.embedding,
       );
 
       await context.read<DataProvider>().updateFact(updatedFact);
@@ -239,6 +245,14 @@ class _EditFactScreenState extends State<EditFactScreen> {
         Navigator.pop(context);
       }
     }
+  }
+  
+  bool _listEquals(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void _showDeleteDialog(BuildContext context) {

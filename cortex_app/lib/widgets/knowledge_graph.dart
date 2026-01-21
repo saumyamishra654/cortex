@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/fact.dart';
+import '../models/graph_settings.dart';
 import '../models/source.dart';
 import '../services/graph_service.dart';
 import '../theme/app_theme.dart';
@@ -9,6 +10,7 @@ import '../theme/app_theme.dart';
 class KnowledgeGraph extends StatefulWidget {
   final GraphData graphData;
   final Map<String, Source> sources;
+  final GraphSettings settings;
   final String? highlightedId;
   final Function(Fact)? onNodeTap;
   final bool showLabels;
@@ -17,6 +19,7 @@ class KnowledgeGraph extends StatefulWidget {
     super.key,
     required this.graphData,
     required this.sources,
+    this.settings = GraphSettings.defaults,
     this.highlightedId,
     this.onNodeTap,
     this.showLabels = true,
@@ -41,7 +44,9 @@ class _KnowledgeGraphState extends State<KnowledgeGraph> {
   @override
   void didUpdateWidget(KnowledgeGraph oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.graphData.nodes.length != widget.graphData.nodes.length) {
+    // Recalculate on node count change OR settings change
+    if (oldWidget.graphData.nodes.length != widget.graphData.nodes.length ||
+        oldWidget.settings != widget.settings) {
       _calculateLayout();
     }
   }
@@ -57,6 +62,7 @@ class _KnowledgeGraphState extends State<KnowledgeGraph> {
         widget.graphData,
         size: Size(renderSize.width, renderSize.height),
         iterations: 100,
+        settings: widget.settings,
       );
       
       setState(() {
@@ -210,9 +216,8 @@ class _GraphPainter extends CustomPainter {
       final isHovered = node.id == hoveredId;
       final nodeSize = node.size * scale;
       
-      // Get color based on source
-      final source = sources[node.fact.sourceId];
-      final baseColor = _getSourceColor(source?.type, isDark);
+      // Get color based on specific source (unique color per source)
+      final baseColor = _getColorForSourceId(node.fact.sourceId, isDark);
       
       // Draw glow for highlighted/hovered
       if (isHighlighted || isHovered) {
@@ -237,24 +242,19 @@ class _GraphPainter extends CustomPainter {
     }
   }
   
-  Color _getSourceColor(SourceType? type, bool isDark) {
-    switch (type) {
-      case SourceType.book:
-        return isDark ? const Color(0xFF64B5F6) : const Color(0xFF1976D2);
-      case SourceType.article:
-        return isDark ? const Color(0xFF81C784) : const Color(0xFF388E3C);
-      case SourceType.podcast:
-        return isDark ? const Color(0xFFBA68C8) : const Color(0xFF7B1FA2);
-      case SourceType.video:
-        return isDark ? const Color(0xFFFF8A65) : const Color(0xFFE64A19);
-      case SourceType.conversation:
-        return isDark ? const Color(0xFFFFD54F) : const Color(0xFFFFA000);
-      case SourceType.course:
-        return isDark ? const Color(0xFF4DD0E1) : const Color(0xFF0097A7);
-      case SourceType.other:
-      case null:
-        return isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary;
+  /// Generate a consistent unique color for a source ID
+  Color _getColorForSourceId(String? sourceId, bool isDark) {
+    if (sourceId == null || sourceId.isEmpty) {
+      return isDark ? AppTheme.darkPrimary : AppTheme.lightPrimary;
     }
+    
+    // Generate a hash-based hue for consistent colors per source
+    final hash = sourceId.hashCode;
+    final hue = (hash % 360).abs().toDouble();
+    final saturation = isDark ? 0.6 : 0.7;
+    final lightness = isDark ? 0.65 : 0.45;
+    
+    return HSLColor.fromAHSL(1.0, hue, saturation, lightness).toColor();
   }
   
   void _drawArrowhead(Canvas canvas, Offset start, Offset end, Color color) {

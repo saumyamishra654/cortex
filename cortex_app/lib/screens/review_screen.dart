@@ -22,9 +22,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
   String? _selectedTag;
 
   @override
+  @override
   void initState() {
     super.initState();
-    _loadFacts();
+    // Use post frame callback to ensure context is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadFacts();
+    });
   }
 
   void _loadFacts() {

@@ -3,14 +3,12 @@ import 'dart:ui' show Color, Offset, Size;
 import 'package:flutter/painting.dart' show HSLColor;
 import '../models/fact.dart';
 import '../models/fact_link.dart';
+import '../models/graph_settings.dart';
 import 'embedding_service.dart';
 
 /// Service for building and managing the knowledge graph
 class GraphService {
   final EmbeddingService? embeddingService;
-  
-  // Threshold for creating semantic edges
-  static const double semanticEdgeThreshold = 0.75;
   
   GraphService([this.embeddingService]);
   
@@ -68,7 +66,7 @@ class GraphService {
           facts[j].embedding!,
         );
         
-        if (similarity >= semanticEdgeThreshold) {
+        if (similarity >= EmbeddingService.similarityThreshold) {
           edges.add(GraphEdge(
             sourceId: facts[i].id,
             targetId: facts[j].id,
@@ -87,11 +85,12 @@ class GraphService {
         l.sourceFactId == factId || l.targetFactId == factId).length;
   }
   
-  /// Calculate force-directed layout positions
+  /// Calculate force-directed layout positions with tunable settings
   Map<String, Offset> calculateLayout(
     GraphData graph, {
     required Size size,
     int iterations = 50,
+    GraphSettings settings = GraphSettings.defaults,
   }) {
     final positions = <String, Offset>{};
     final velocities = <String, Offset>{};
@@ -106,11 +105,25 @@ class GraphService {
       velocities[node.id] = Offset.zero;
     }
     
-    // Force-directed simulation
-    const repulsionStrength = 5000.0;
-    const attractionStrength = 0.01;
+    // Calculate min/max similarity for normalization
+    double minSim = 1.0;
+    double maxSim = 0.0;
+    for (final edge in graph.edges) {
+      if (edge.type == EdgeType.semantic) {
+        minSim = min(minSim, edge.weight);
+        maxSim = max(maxSim, edge.weight);
+      }
+    }
+    final simRange = maxSim - minSim;
+    
+    // Use settings
+    final repulsionStrength = settings.repelForce;
+    final attractionStrength = settings.linkForce;
+    final centerStrength = settings.centerForce;
     const damping = 0.85;
     const minDistance = 50.0;
+    
+    final center = Offset(size.width / 2, size.height / 2);
     
     for (int iter = 0; iter < iterations; iter++) {
       // Apply repulsion between all nodes
@@ -143,12 +156,27 @@ class GraphService {
             final pos1 = positions[node1.id]!;
             final pos2 = positions[connectedId]!;
             final delta = pos2 - pos1;
+            final currentDistance = delta.distance;
             
-            // Attraction force (proportional to distance and edge weight)
-            final attraction = delta * attractionStrength * edge.weight;
+            // Calculate ideal distance based on similarity
+            double idealDistance = settings.baseDistance;
+            if (edge.type == EdgeType.semantic && simRange > 0) {
+              // Normalize similarity to 0-1 range
+              final normalizedSim = (edge.weight - minSim) / simRange;
+              // Higher similarity = shorter distance
+              idealDistance = settings.baseDistance * (1 - normalizedSim * 0.8) * settings.similarityInfluence;
+            }
+            
+            // Spring-like attraction toward ideal distance
+            final displacement = currentDistance - idealDistance;
+            final attraction = delta / max(currentDistance, 1) * displacement * attractionStrength;
             force = force + attraction;
           }
         }
+        
+        // Center force - pull toward center
+        final toCenter = center - positions[node1.id]!;
+        force = force + toCenter * centerStrength;
         
         // Update velocity and position
         velocities[node1.id] = (velocities[node1.id]! + force) * damping;

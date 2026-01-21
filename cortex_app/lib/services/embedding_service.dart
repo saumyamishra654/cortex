@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
-import 'package:flutter/foundation.dart' show kIsWeb, compute;
+import 'package:flutter/foundation.dart' show kIsWeb, compute, debugPrint;
 import 'package:http/http.dart' as http;
 import '../models/fact.dart';
 import 'secure_storage_service.dart';
@@ -14,15 +14,12 @@ class EmbeddingService {
   static const String _openAiBaseUrl = 'https://api.openai.com/v1';
   static const String _openAiModel = 'text-embedding-3-small';
   
-  // Hugging Face settings
-  static const String _huggingFaceBaseUrl = 'https://api-inference.huggingface.co/models';
-  static const String _huggingFaceModel = 'sentence-transformers/all-MiniLM-L6-v2';
-  
-  // CORS proxy for web (needed because HuggingFace doesn't support CORS)
-  static const String _corsProxy = 'https://corsproxy.io/?';
+  // Hugging Face settings (using recommended model for feature extraction)
+  static const String _huggingFaceBaseUrl = 'https://router.huggingface.co/hf-inference/models';
+  static const String _huggingFaceModel = 'intfloat/multilingual-e5-large';
   
   // Similarity threshold for considering facts "related"
-  static const double similarityThreshold = 0.7;
+  static const double similarityThreshold = 0.8;
   
   EmbeddingService({
     this.apiKey,
@@ -32,17 +29,9 @@ class EmbeddingService {
   /// Check if API is configured
   bool get isConfigured => apiKey != null && apiKey!.isNotEmpty;
   
-  /// Check if running on web (CORS limitations)
-  bool get isWeb => kIsWeb;
-  
   /// Generate embedding for a single text
   Future<List<double>?> generateEmbedding(String text) async {
     if (!isConfigured) return null;
-    
-    // Info message for web users
-    if (isWeb && provider == EmbeddingProvider.huggingface) {
-      print('ℹ️ Using CORS proxy for Hugging Face on web');
-    }
     
     switch (provider) {
       case EmbeddingProvider.openai:
@@ -50,6 +39,19 @@ class EmbeddingService {
       case EmbeddingProvider.huggingface:
         return _generateHuggingFaceEmbedding(text);
     }
+  }
+  
+  /// Generate embedding for text with context (appends tags/subjects)
+  /// This improves semantic matching by including category information
+  Future<List<double>?> generateEmbeddingWithContext(String text, List<String> subjects) async {
+    if (!isConfigured) return null;
+    
+    // Append subjects/tags to improve semantic matching
+    final contextualText = subjects.isNotEmpty 
+        ? '$text [Topics: ${subjects.join(", ")}]'
+        : text;
+    
+    return generateEmbedding(contextualText);
   }
   
   /// Generate embedding using OpenAI API
@@ -85,55 +87,55 @@ class EmbeddingService {
   
   /// Generate embedding using Hugging Face Inference API
   Future<List<double>?> _generateHuggingFaceEmbedding(String text) async {
+    final url = '$_huggingFaceBaseUrl/$_huggingFaceModel';
+    return _makeHuggingFaceRequest(url, text);
+  }
+  
+  /// Make the actual HuggingFace API request
+  Future<List<double>?> _makeHuggingFaceRequest(String url, String text) async {
     try {
-      // Use CORS proxy on web to bypass browser restrictions
-      final baseUrl = '$_huggingFaceBaseUrl/$_huggingFaceModel';
-      final url = isWeb 
-          ? '$_corsProxy${Uri.encodeComponent(baseUrl)}'
-          : baseUrl;
-      
       final response = await http.post(
         Uri.parse(url),
         headers: {
           'Authorization': 'Bearer $apiKey',
           'Content-Type': 'application/json',
         },
-        body: jsonEncode({
-          'inputs': text,
-          'options': {'wait_for_model': true},
-        }),
+        body: jsonEncode({'inputs': text}),
       );
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        debugPrint('HuggingFace response type: ${data.runtimeType}');
+        
         // HuggingFace returns the embedding directly as a list
         // For sentence-transformers, it returns a 2D array where we need the first element
         if (data is List && data.isNotEmpty) {
+          debugPrint('First element type: ${data[0].runtimeType}, length: ${data.length}');
           if (data[0] is List) {
             // Handle nested array (sentence embedding)
-            return (data[0] as List).map((e) => (e as num).toDouble()).toList();
+            final embedding = (data[0] as List).map((e) => (e as num).toDouble()).toList();
+            debugPrint('Parsed embedding length: ${embedding.length}');
+            return embedding;
           } else {
             // Direct array of numbers
-            return data.map((e) => (e as num).toDouble()).toList();
+            final embedding = data.map((e) => (e as num).toDouble()).toList();
+            debugPrint('Parsed embedding length: ${embedding.length}');
+            return embedding;
           }
         }
+        debugPrint('Failed to parse response: $data');
         return null;
       } else if (response.statusCode == 503) {
         // Model is loading, wait and retry
-        print('HuggingFace model loading, waiting...');
+        debugPrint('HuggingFace model loading, waiting...');
         await Future.delayed(const Duration(seconds: 2));
-        return _generateHuggingFaceEmbedding(text);
+        return _makeHuggingFaceRequest(url, text);
       } else {
-        print('HuggingFace Embedding API error: ${response.statusCode} ${response.body}');
+        debugPrint('HuggingFace API error: ${response.statusCode} ${response.body}');
         return null;
       }
     } catch (e) {
-      // Check if it's a CORS error on web
-      if (isWeb && e.toString().contains('Failed to fetch')) {
-        print('❌ CORS proxy error. The proxy service may be temporarily unavailable. Try again later or use OpenAI.');
-      } else {
-        print('HuggingFace embedding generation failed: $e');
-      }
+      debugPrint('HuggingFace request failed: $e');
       return null;
     }
   }

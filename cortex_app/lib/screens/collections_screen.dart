@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/fact_link.dart';
 import '../models/smart_collection.dart';
+
 import '../providers/data_provider.dart';
 import '../services/collection_service.dart';
 import '../widgets/fact_card.dart';
-import 'fact_detail_screen.dart';
+import '../widgets/create_collection_dialog.dart';
 
 class CollectionsScreen extends StatefulWidget {
   const CollectionsScreen({super.key});
@@ -16,184 +16,310 @@ class CollectionsScreen extends StatefulWidget {
 
 class _CollectionsScreenState extends State<CollectionsScreen> {
   final CollectionService _collectionService = CollectionService();
+  List<SmartCollection> _dynamicCollections = [];
+  bool _isLoadingDynamic = true;
   SmartCollection? _selectedCollection;
 
   @override
+  void initState() {
+    super.initState();
+    _loadDynamicCollections();
+  }
+
+  Future<void> _loadDynamicCollections() async {
+    final provider = context.read<DataProvider>();
+    // Wait for provider to be ready if needed
+    if (provider.isLoading) return;
+
+    setState(() => _isLoadingDynamic = true);
+    
+    try {
+      final dynamicCols = await _collectionService.generateDynamicCollections(
+        provider.facts, 
+        provider.factLinks
+      );
+      if (mounted) {
+        setState(() {
+          _dynamicCollections = dynamicCols;
+          _isLoadingDynamic = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error generating dynamic collections: $e');
+      if (mounted) {
+        setState(() => _isLoadingDynamic = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_selectedCollection != null) {
+      return _buildCollectionDetail(_selectedCollection!);
+    }
+
     final theme = Theme.of(context);
-    final builtInCollections = _collectionService.getBuiltInCollections();
+    final provider = context.watch<DataProvider>();
+    final userCollections = provider.userCollections;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectedCollection?.name ?? 'Collections'),
-        leading: _selectedCollection != null
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  setState(() => _selectedCollection = null);
-                },
-              )
-            : null,
-      ),
-      body: _selectedCollection != null
-          ? _buildCollectionDetail(_selectedCollection!)
-          : _buildCollectionList(builtInCollections),
-      floatingActionButton: _selectedCollection == null
-          ? FloatingActionButton.extended(
-              heroTag: 'collections_new',
-              onPressed: () {
-                // TODO: Open create collection dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Custom collections coming soon!'),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('New Collection'),
-            )
-          : null,
-    );
-  }
-
-  Widget _buildCollectionList(List<SmartCollection> collections) {
-    final theme = Theme.of(context);
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: collections.length,
-      itemBuilder: (context, index) {
-        final collection = collections[index];
-        final provider = context.read<DataProvider>();
-        final factCount = _collectionService
-            .executeCollection(collection, provider.facts, <FactLink>[])
-            .length;
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                _getIconData(collection.icon),
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            title: Text(
-              collection.name,
-              style: theme.textTheme.titleMedium,
-            ),
-            subtitle: Text(
-              '$factCount facts',
-              style: theme.textTheme.bodyMedium,
-            ),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () {
-              setState(() => _selectedCollection = collection);
+        title: const Text('Library'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              _loadDynamicCollections();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Refreshing insights...')),
+              );
             },
+            tooltip: 'Refresh Insights',
           ),
-        );
-      },
+        ],
+      ),
+      body: CustomScrollView(
+        slivers: [
+          // Section: Smart Insights (Dynamic)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.auto_awesome, size: 20, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Smart Insights',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          if (_isLoadingDynamic)
+            const SliverToBoxAdapter(
+              child: Center(child: Padding(
+                padding: EdgeInsets.all(32.0),
+                child: CircularProgressIndicator(),
+              )),
+            )
+          else if (_dynamicCollections.isEmpty)
+             SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'No insights found yet. Add more connected facts!',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final collection = _dynamicCollections[index];
+                  final count = collection.dynamicParams['factCount'] ?? '?';
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: theme.colorScheme.primaryContainer,
+                      child: Icon(
+                        _getIcon(collection.icon), 
+                        color: theme.colorScheme.onPrimaryContainer
+                      ),
+                    ),
+                    title: Text(collection.name),
+                    subtitle: Text('$count facts'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => setState(() => _selectedCollection = collection),
+                  );
+                },
+                childCount: _dynamicCollections.length,
+              ),
+            ),
+
+          // Section: Your Collections (Manual)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.folder_special, size: 20, color: theme.colorScheme.secondary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Your Collections',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: theme.colorScheme.secondary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          if (userCollections.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'No custom collections yet.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final collection = userCollections[index];
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: theme.colorScheme.secondaryContainer,
+                      child: Icon(Icons.folder, color: theme.colorScheme.onSecondaryContainer),
+                    ),
+                    title: Text(collection.name),
+                    subtitle: Text('${collection.filters.length} filters'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => setState(() => _selectedCollection = collection),
+                    onLongPress: () => _confirmDeleteCollection(collection),
+                  );
+                },
+                childCount: userCollections.length,
+              ),
+            ),
+            
+          const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showCreateDialog,
+        icon: const Icon(Icons.add),
+        label: const Text('New Collection'),
+      ),
     );
   }
 
   Widget _buildCollectionDetail(SmartCollection collection) {
+    final provider = context.watch<DataProvider>();
     final theme = Theme.of(context);
+    
+    final facts = _collectionService.executeCollection(
+      collection, 
+      provider.facts, 
+      provider.factLinks
+    );
 
-    return Consumer<DataProvider>(
-      builder: (context, provider, child) {
-        final facts = _collectionService.executeCollection(
-          collection,
-          provider.facts,
-          <FactLink>[],
-        );
-
-        if (facts.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  _getIconData(collection.icon),
-                  size: 64,
-                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No matching facts',
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _getEmptyMessage(collection),
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-              ],
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => setState(() => _selectedCollection = null),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(collection.name),
+            Text(
+              '${facts.length} facts',
+              style: theme.textTheme.labelSmall,
             ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.only(top: 8, bottom: 80),
-          itemCount: facts.length,
-          itemBuilder: (context, index) {
-            final fact = facts[index];
-            final source = provider.sources.firstWhere(
-              (s) => s.id == fact.sourceId,
-              orElse: () => provider.sources.first,
-            );
-
-            return FactCard(
-              fact: fact,
-              sourceName: source.name,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => FactDetailScreen(fact: fact),
-                  ),
+          ],
+        ),
+        actions: [
+          if (!collection.isBuiltIn && collection.type == CollectionType.manual)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () {
+                _confirmDeleteCollection(collection);
+                setState(() => _selectedCollection = null);
+              },
+            ),
+        ],
+      ),
+      body: facts.isEmpty
+          ? Center(
+              child: Text(
+                'No facts match these filters.',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: facts.length,
+              itemBuilder: (context, index) {
+                return FactCard(
+                  fact: facts[index],
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context, 
+                      '/fact_detail', 
+                      arguments: facts[index]
+                    );
+                  },
                 );
               },
-            );
-          },
-        );
-      },
+            ),
     );
   }
 
-  String _getEmptyMessage(SmartCollection collection) {
-    switch (collection.id) {
-      case 'builtin_due':
-        return 'All caught up! No cards due for review.';
-      case 'builtin_connected':
-        return 'Add links between facts to see highly connected ones.';
-      case 'builtin_unlinked':
-        return 'All your facts have connections!';
-      default:
-        return 'No facts match this collection\'s filters.';
+  IconData _getIcon(String iconName) {
+    switch (iconName) {
+      case 'bubble_chart': return Icons.bubble_chart;
+      case 'share': return Icons.share;
+      case 'folder': return Icons.folder;
+      case 'schedule': return Icons.schedule;
+      case 'new_releases': return Icons.new_releases;
+      case 'hub': return Icons.hub;
+      case 'link_off': return Icons.link_off;
+      case 'auto_awesome': return Icons.auto_awesome;
+      default: return Icons.folder;
+    }
+  }
+  
+  Future<void> _showCreateDialog() async {
+    final result = await showDialog<SmartCollection>(
+      context: context, 
+      builder: (_) => const CreateCollectionDialog(),
+    );
+    
+    if (result != null && mounted) {
+      context.read<DataProvider>().createCollection(result);
     }
   }
 
-  IconData _getIconData(String iconName) {
-    switch (iconName) {
-      case 'schedule':
-        return Icons.schedule_rounded;
-      case 'new_releases':
-        return Icons.new_releases_rounded;
-      case 'hub':
-        return Icons.hub_rounded;
-      case 'link_off':
-        return Icons.link_off_rounded;
-      case 'folder':
-        return Icons.folder_rounded;
-      default:
-        return Icons.folder_rounded;
+  Future<void> _confirmDeleteCollection(SmartCollection collection) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Collection?'),
+        content: Text('Delete "${collection.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false), 
+            child: const Text('Cancel')
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text('Delete')
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm == true && mounted) {
+      context.read<DataProvider>().deleteCollection(collection.id);
     }
   }
 }

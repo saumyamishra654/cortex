@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/source.dart';
 import '../theme/app_theme.dart';
 
@@ -78,13 +79,44 @@ class SourceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      source.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            source.name,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (source.url != null && source.url!.isNotEmpty) ...[
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: () async {
+                              final uri = Uri.parse(source.url!);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(uri);
+                              } else {
+                                // Try adding https if missing
+                                final fixedUri = Uri.parse('https://${source.url}');
+                                if (await canLaunchUrl(fixedUri)) {
+                                  await launchUrl(fixedUri);
+                                }
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Icon(
+                                Icons.open_in_new, 
+                                size: 16, 
+                                color: theme.colorScheme.primary.withValues(alpha: 0.7)
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(

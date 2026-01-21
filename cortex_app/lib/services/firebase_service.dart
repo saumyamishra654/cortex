@@ -166,6 +166,7 @@ class FirebaseService {
           : null,
       'createdAt': Timestamp.fromDate(fact.createdAt),
       'updatedAt': Timestamp.fromDate(fact.updatedAt),
+      'embedding': fact.embedding,
     });
   }
 
@@ -183,6 +184,7 @@ class FirebaseService {
           ? Timestamp.fromDate(fact.nextReviewAt!)
           : null,
       'updatedAt': Timestamp.now(),
+      'embedding': fact.embedding,
     });
   }
 
@@ -233,6 +235,7 @@ class FirebaseService {
             : null,
         'createdAt': Timestamp.fromDate(fact.createdAt),
         'updatedAt': Timestamp.fromDate(fact.updatedAt),
+        'embedding': fact.embedding,
       }, SetOptions(merge: true));
     }
 
@@ -278,6 +281,9 @@ class FirebaseService {
             : null,
         createdAt: (data['createdAt'] as Timestamp).toDate(),
         updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+        embedding: data['embedding'] != null
+            ? List<double>.from((data['embedding'] as List).map((e) => (e as num).toDouble()))
+            : null,
       );
     }).toList();
 
@@ -361,6 +367,9 @@ class FirebaseService {
               : null,
           createdAt: (data['createdAt'] as Timestamp).toDate(),
           updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+          embedding: data['embedding'] != null
+              ? List<double>.from((data['embedding'] as List).map((e) => (e as num).toDouble()))
+              : null,
         );
       }).toList();
     });

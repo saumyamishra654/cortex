@@ -18,18 +18,21 @@ class EditSourceScreen extends StatefulWidget {
 class _EditSourceScreenState extends State<EditSourceScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
+  late TextEditingController _urlController;
   late SourceType _selectedType;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.source.name);
+    _urlController = TextEditingController(text: widget.source.url);
     _selectedType = widget.source.type;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _urlController.dispose();
     super.dispose();
   }
 
@@ -65,6 +68,16 @@ class _EditSourceScreenState extends State<EditSourceScreen> {
                 return null;
               },
               autofocus: true,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _urlController,
+              decoration: const InputDecoration(
+                labelText: 'Link (Optional)',
+                hintText: 'https://...',
+                prefixIcon: Icon(Icons.link),
+              ),
+              keyboardType: TextInputType.url,
             ),
             const SizedBox(height: 24),
             Text(
@@ -152,6 +165,7 @@ class _EditSourceScreenState extends State<EditSourceScreen> {
         type: _selectedType,
         createdAt: widget.source.createdAt,
         updatedAt: DateTime.now(),
+        url: _urlController.text.trim().isEmpty ? null : _urlController.text.trim(),
       );
       
       await context.read<DataProvider>().updateSource(updatedSource);

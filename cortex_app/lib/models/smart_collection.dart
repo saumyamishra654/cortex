@@ -19,6 +19,8 @@ enum FilterField {
   isDue,
   @HiveField(6)
   content,
+  @HiveField(7)
+  id,
 }
 
 /// Filter operator options
@@ -38,6 +40,19 @@ enum FilterOperator {
   isTrue,
   @HiveField(6)
   isFalse,
+  @HiveField(7)
+  isIn, // value is comma-separated list
+}
+
+/// Type of smart collection
+@HiveType(typeId: 9)
+enum CollectionType {
+  @HiveField(0)
+  manual,  // User created
+  @HiveField(1)
+  cluster, // Auto-generated semantic cluster
+  @HiveField(2)
+  structure, // Auto-generated structural component (island/bridge)
 }
 
 /// Sort order options
@@ -94,6 +109,8 @@ class CollectionFilter {
         return 'is true';
       case FilterOperator.isFalse:
         return 'is false';
+      case FilterOperator.isIn:
+        return 'is in';
     }
   }
 }
@@ -124,6 +141,12 @@ class SmartCollection extends HiveObject {
 
   @HiveField(7)
   final bool isBuiltIn; // Cannot be deleted
+  
+  @HiveField(8)
+  final CollectionType type;
+  
+  @HiveField(9)
+  final Map<String, String> dynamicParams; // For storing cluster IDs, topics, etc.
 
   SmartCollection({
     required this.id,
@@ -134,6 +157,8 @@ class SmartCollection extends HiveObject {
     required this.sortDescending,
     required this.createdAt,
     this.isBuiltIn = false,
+    this.type = CollectionType.manual,
+    this.dynamicParams = const {},
   });
 
   factory SmartCollection.create({
@@ -154,6 +179,29 @@ class SmartCollection extends HiveObject {
       sortDescending: sortDescending,
       createdAt: DateTime.now(),
       isBuiltIn: isBuiltIn,
+      type: CollectionType.manual,
+    );
+  }
+  
+  factory SmartCollection.dynamic({
+    required String id,
+    required String name,
+    required CollectionType type,
+    String icon = 'auto_awesome',
+    Map<String, String> params = const {},
+    List<CollectionFilter> filters = const [],
+  }) {
+    return SmartCollection(
+      id: id,
+      name: name,
+      icon: icon,
+      filters: filters,
+      sortField: SortField.linkCount, // Default for insights
+      sortDescending: true,
+      createdAt: DateTime.now(),
+      isBuiltIn: false,
+      type: type,
+      dynamicParams: params,
     );
   }
 }

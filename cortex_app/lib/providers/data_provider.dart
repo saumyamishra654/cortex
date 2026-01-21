@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/source.dart';
 import '../models/fact.dart';
 import '../models/fact_link.dart';
+import '../models/smart_collection.dart';
 import '../services/storage_service.dart';
 import '../services/firebase_service.dart';
 import '../services/link_service.dart';
@@ -17,6 +18,8 @@ class DataProvider extends ChangeNotifier {
   final Map<String, Source> _sourcesMap = {};
   final Map<String, Fact> _factsMap = {};
   final Map<String, FactLink> _factLinksMap = {};
+  // Persisted user collections
+  final Map<String, SmartCollection> _collectionsMap = {};
   
   // Cached computed values (invalidated on data changes)
   List<String>? _cachedSubjects;
@@ -37,6 +40,7 @@ class DataProvider extends ChangeNotifier {
   List<Source> get sources => _sourcesMap.values.toList();
   List<Fact> get facts => _factsMap.values.toList();
   List<FactLink> get factLinks => _factLinksMap.values.toList();
+  List<SmartCollection> get userCollections => _collectionsMap.values.toList();
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;
   
@@ -202,6 +206,11 @@ class DataProvider extends ChangeNotifier {
     for (final f in facts) { _factsMap[f.id] = f; }
     for (final l in links) { _factLinksMap[l.id] = l; }
     
+    // Load collections
+    _collectionsMap.clear();
+    final cols = await _storage.getAllCollections();
+    for (final c in cols) { _collectionsMap[c.id] = c; }
+    
     _invalidateCaches();
   }
 
@@ -219,8 +228,9 @@ class DataProvider extends ChangeNotifier {
   Future<Source> addSource({
     required String name,
     required SourceType type,
+    String? url,
   }) async {
-    final source = Source.create(id: _uuid.v4(), name: name, type: type);
+    final source = Source.create(id: _uuid.v4(), name: name, type: type, url: url);
 
     // Save locally
     await _storage.saveSource(source);
@@ -466,6 +476,22 @@ class DataProvider extends ChangeNotifier {
     final shuffled = List<Fact>.from(_factsMap.values);
     shuffled.shuffle();
     return shuffled;
+  }
+
+
+  
+  /// Create a new user collection
+  Future<void> createCollection(SmartCollection collection) async {
+    await _storage.saveCollection(collection);
+    _collectionsMap[collection.id] = collection;
+    notifyListeners();
+  }
+  
+  /// Delete a user collection
+  Future<void> deleteCollection(String id) async {
+    await _storage.deleteCollection(id);
+    _collectionsMap.remove(id);
+    notifyListeners();
   }
 
   @override

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/graph_settings.dart';
 import '../providers/data_provider.dart';
 import '../services/graph_service.dart';
 import '../services/embedding_service.dart';
 import '../widgets/knowledge_graph.dart';
+import '../widgets/graph_settings_panel.dart';
 import 'fact_detail_screen.dart';
 
 class GraphScreen extends StatefulWidget {
@@ -17,6 +19,25 @@ class _GraphScreenState extends State<GraphScreen> {
   bool _showSemanticEdges = true;
   String? _filterSourceId;
   String? _filterSubject;
+  GraphSettings _settings = GraphSettings.defaults;
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+  
+  Future<void> _loadSettings() async {
+    final settings = await GraphSettings.load();
+    if (mounted) {
+      setState(() => _settings = settings);
+    }
+  }
+  
+  void _updateSettings(GraphSettings newSettings) {
+    setState(() => _settings = newSettings);
+    newSettings.save();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,41 +61,98 @@ class _GraphScreenState extends State<GraphScreen> {
             },
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.filter_list_rounded),
-            tooltip: 'Filter',
+            icon: Badge(
+              isLabelVisible: _filterSourceId != null || _filterSubject != null,
+              child: const Icon(Icons.filter_list_rounded),
+            ),
+            tooltip: 'Filter by source or tag',
             onSelected: (value) {
               if (value == 'clear') {
                 setState(() {
                   _filterSourceId = null;
                   _filterSubject = null;
                 });
+              } else if (value.startsWith('source_')) {
+                setState(() {
+                  _filterSourceId = value.substring(7);
+                  _filterSubject = null;
+                });
+              } else if (value.startsWith('subject_')) {
+                setState(() {
+                  _filterSubject = value.substring(8);
+                  _filterSourceId = null;
+                });
               }
             },
             itemBuilder: (context) {
               final provider = context.read<DataProvider>();
               return [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'clear',
+                  enabled: _filterSourceId != null || _filterSubject != null,
                   child: Row(
                     children: [
-                      Icon(Icons.clear_all_rounded),
-                      SizedBox(width: 12),
-                      Text('Clear Filters'),
+                      Icon(Icons.clear_all_rounded, 
+                        color: (_filterSourceId != null || _filterSubject != null) 
+                            ? null : Colors.grey),
+                      const SizedBox(width: 12),
+                      Text('Clear Filters',
+                        style: TextStyle(
+                          color: (_filterSourceId != null || _filterSubject != null) 
+                              ? null : Colors.grey)),
                     ],
                   ),
                 ),
                 const PopupMenuDivider(),
+                // Sources section
+                const PopupMenuItem(
+                  enabled: false,
+                  height: 32,
+                  child: Text('SOURCES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
                 ...provider.sources.map(
                   (source) => PopupMenuItem(
                     value: 'source_${source.id}',
-                    child: Text(source.name),
-                    onTap: () {
-                      setState(() {
-                        _filterSourceId = source.id;
-                      });
-                    },
+                    child: Row(
+                      children: [
+                        if (_filterSourceId == source.id)
+                          const Icon(Icons.check, size: 18)
+                        else
+                          const SizedBox(width: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(source.name)),
+                        Text('${provider.facts.where((f) => f.sourceId == source.id).length}',
+                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
                   ),
                 ),
+                if (provider.allSubjects.isNotEmpty) ...[
+                  const PopupMenuDivider(),
+                  // Tags section
+                  const PopupMenuItem(
+                    enabled: false,
+                    height: 32,
+                    child: Text('TAGS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                  ...provider.allSubjects.take(15).map(
+                    (subject) => PopupMenuItem(
+                      value: 'subject_$subject',
+                      child: Row(
+                        children: [
+                          if (_filterSubject == subject)
+                            const Icon(Icons.check, size: 18)
+                          else
+                            const SizedBox(width: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(subject)),
+                          Text('${provider.facts.where((f) => f.subjects.contains(subject)).length}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ];
             },
           ),
@@ -182,19 +260,28 @@ class _GraphScreenState extends State<GraphScreen> {
                 ),
               ),
 
-              // Graph
+              // Graph with settings panel overlay
               Expanded(
-                child: KnowledgeGraph(
-                  graphData: graphData,
-                  sources: sources,
-                  onNodeTap: (fact) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => FactDetailScreen(fact: fact),
-                      ),
-                    );
-                  },
+                child: Stack(
+                  children: [
+                    KnowledgeGraph(
+                      graphData: graphData,
+                      sources: sources,
+                      settings: _settings,
+                      onNodeTap: (fact) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FactDetailScreen(fact: fact),
+                          ),
+                        );
+                      },
+                    ),
+                    GraphSettingsPanel(
+                      settings: _settings,
+                      onSettingsChanged: _updateSettings,
+                    ),
+                  ],
                 ),
               ),
 

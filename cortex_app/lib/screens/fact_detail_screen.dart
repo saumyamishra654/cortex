@@ -6,6 +6,7 @@ import '../services/embedding_service.dart';
 import '../services/secure_storage_service.dart';
 import '../widgets/linked_text.dart';
 import '../widgets/related_facts_panel.dart';
+import 'edit_fact_screen.dart';
 import 'link_references_screen.dart';
 
 class FactDetailScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class FactDetailScreen extends StatefulWidget {
 }
 
 class _FactDetailScreenState extends State<FactDetailScreen> {
+  late Fact _currentFact;
   List<RelatedFact> _relatedFacts = [];
   bool _isLoadingRelated = false;
   bool _isGeneratingEmbedding = false;
@@ -25,6 +27,7 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _currentFact = widget.fact;
     _loadRelatedFacts();
   }
 
@@ -36,10 +39,10 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
 
     // Find related facts (now async for isolate support)
     final related = await embeddingService.findRelatedFacts(
-      widget.fact,
+      _currentFact,
       provider.facts,
       limit: 5,
-      threshold: 0.6,
+      threshold: EmbeddingService.similarityThreshold,
     );
 
     if (mounted) {
@@ -78,29 +81,35 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
       }
 
       final embeddingService = EmbeddingService(apiKey: apiKey, provider: provider);
-      final embedding = await embeddingService.generateEmbedding(
-        widget.fact.content,
+      final embedding = await embeddingService.generateEmbeddingWithContext(
+        _currentFact.content,
+        _currentFact.subjects,
       );
 
       if (embedding != null && mounted) {
         final provider = context.read<DataProvider>();
         final updatedFact = Fact(
-          id: widget.fact.id,
-          content: widget.fact.content,
-          sourceId: widget.fact.sourceId,
-          subjects: widget.fact.subjects,
-          imageUrl: widget.fact.imageUrl,
-          ocrText: widget.fact.ocrText,
-          createdAt: widget.fact.createdAt,
+          id: _currentFact.id,
+          content: _currentFact.content,
+          sourceId: _currentFact.sourceId,
+          subjects: _currentFact.subjects,
+          imageUrl: _currentFact.imageUrl,
+          ocrText: _currentFact.ocrText,
+          createdAt: _currentFact.createdAt,
           updatedAt: DateTime.now(),
-          repetitions: widget.fact.repetitions,
-          easeFactor: widget.fact.easeFactor,
-          interval: widget.fact.interval,
-          nextReviewAt: widget.fact.nextReviewAt,
+          repetitions: _currentFact.repetitions,
+          easeFactor: _currentFact.easeFactor,
+          interval: _currentFact.interval,
+          nextReviewAt: _currentFact.nextReviewAt,
           embedding: embedding,
         );
 
         await provider.updateFact(updatedFact);
+        
+        // Update local state to reflect the change
+        setState(() {
+          _currentFact = updatedFact;
+        });
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -133,14 +142,14 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
     final selectedFact = await showDialog<Fact>(
       context: context,
       builder: (context) => _FactSelectorDialog(
-        facts: provider.facts.where((f) => f.id != widget.fact.id).toList(),
+        facts: provider.facts.where((f) => f.id != _currentFact.id).toList(),
       ),
     );
 
     if (selectedFact == null || !mounted) return;
 
     // Calculate similarity
-    if (widget.fact.embedding == null || selectedFact.embedding == null) {
+    if (_currentFact.embedding == null || selectedFact.embedding == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Both facts need embeddings. Generate them first.'),
@@ -151,7 +160,7 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
 
     // Calculate similarity using static method
     final similarity = EmbeddingService.cosineSimilarity(
-      widget.fact.embedding!,
+      _currentFact.embedding!,
       selectedFact.embedding!,
     );
 
@@ -242,11 +251,11 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
     final theme = Theme.of(context);
     final provider = context.watch<DataProvider>();
     final source = provider.sources.firstWhere(
-      (s) => s.id == widget.fact.sourceId,
+      (s) => s.id == _currentFact.sourceId,
       orElse: () => provider.sources.first,
     );
 
-    final hasEmbedding = widget.fact.embedding != null;
+    final hasEmbedding = _currentFact.embedding != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -261,8 +270,22 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
           // Edit button
           IconButton(
             icon: const Icon(Icons.edit_rounded),
-            onPressed: () {
-              // TODO: Navigate to edit screen
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => EditFactScreen(fact: _currentFact),
+                ),
+              );
+              // Refresh the fact after editing
+              if (mounted) {
+                final provider = context.read<DataProvider>();
+                final updatedFact = provider.facts.firstWhere(
+                  (f) => f.id == _currentFact.id,
+                  orElse: () => _currentFact,
+                );
+                setState(() => _currentFact = updatedFact);
+              }
             },
           ),
           // Delete button
@@ -292,7 +315,7 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   LinkedText(
-                    content: widget.fact.displayText,
+                    content: _currentFact.displayText,
                     style: theme.textTheme.bodyLarge?.copyWith(
                       fontSize: 18,
                       height: 1.6,
@@ -374,14 +397,14 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
                   const SizedBox(height: 12),
 
                   // Subjects
-                  if (widget.fact.subjects.isNotEmpty) ...[
+                  if (_currentFact.subjects.isNotEmpty) ...[
                     _MetadataRow(
                       icon: Icons.label_rounded,
                       label: 'Subjects',
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 4,
-                        children: widget.fact.subjects.map((s) {
+                        children: _currentFact.subjects.map((s) {
                           return Chip(
                             label: Text(s),
                             padding: EdgeInsets.zero,
@@ -405,7 +428,7 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
                   _MetadataRow(
                     icon: Icons.calendar_today_rounded,
                     label: 'Created',
-                    value: _formatDate(widget.fact.createdAt),
+                    value: _formatDate(_currentFact.createdAt),
                   ),
 
                   // Embedding status
@@ -443,12 +466,12 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
   }
 
   String _getReviewStatus() {
-    if (widget.fact.repetitions == 0) {
+    if (_currentFact.repetitions == 0) {
       return 'New (never reviewed)';
-    } else if (widget.fact.isDueForReview) {
+    } else if (_currentFact.isDueForReview) {
       return 'Due for review';
     } else {
-      final daysUntil = widget.fact.nextReviewAt!
+      final daysUntil = _currentFact.nextReviewAt!
           .difference(DateTime.now())
           .inDays;
       return 'Next review in $daysUntil days';
@@ -472,7 +495,7 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
           ),
           TextButton(
             onPressed: () {
-              context.read<DataProvider>().deleteFact(widget.fact.id);
+              context.read<DataProvider>().deleteFact(_currentFact.id);
               Navigator.pop(context); // Close dialog
               Navigator.pop(context); // Go back
             },

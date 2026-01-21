@@ -1,9 +1,11 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/fact.dart';
 import '../providers/data_provider.dart';
 import '../services/secure_storage_service.dart';
 import '../services/firebase_service.dart';
+import '../services/embedding_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -27,6 +29,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _hasHuggingFaceKey = false;
   EmbeddingProvider _selectedProvider = EmbeddingProvider.huggingface;
   bool _isLoading = true;
+  bool _isGeneratingBatch = false;
+  int _batchProgress = 0;
+  int _batchTotal = 0;
 
   @override
   void initState() {
@@ -247,6 +252,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Maintenance Section
           _SectionHeader(title: 'Maintenance'),
+          ListTile(
+            leading: const Icon(Icons.auto_fix_high_rounded),
+            title: const Text('Generate All Embeddings'),
+            subtitle: _isGeneratingBatch
+                ? Text('Processing $_batchProgress of $_batchTotal...')
+                : Text('${provider.facts.where((f) => f.embedding == null).length} facts without embeddings'),
+            trailing: _isGeneratingBatch
+                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.chevron_right_rounded),
+            onTap: _isGeneratingBatch ? null : () => _generateAllEmbeddings(provider),
+          ),
           ListTile(
             leading: const Icon(Icons.refresh_rounded),
             title: const Text('Refresh All Links'),
@@ -552,6 +568,89 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ).showSnackBar(SnackBar(content: Text('Error: $e')));
         }
       }
+    }
+  }
+
+  Future<void> _generateAllEmbeddings(DataProvider provider) async {
+    final apiKey = await SecureStorageService.getActiveApiKey();
+    if (apiKey == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please configure ${_selectedProvider == EmbeddingProvider.huggingface ? "Hugging Face" : "OpenAI"} API key first',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    final factsWithoutEmbeddings = provider.facts.where((f) => f.embedding == null).toList();
+    if (factsWithoutEmbeddings.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('All facts already have embeddings')),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isGeneratingBatch = true;
+      _batchProgress = 0;
+      _batchTotal = factsWithoutEmbeddings.length;
+    });
+
+    final embeddingService = EmbeddingService(apiKey: apiKey, provider: _selectedProvider);
+    int successCount = 0;
+
+    for (final fact in factsWithoutEmbeddings) {
+      if (!mounted) break;
+
+      try {
+        final embedding = await embeddingService.generateEmbeddingWithContext(
+          fact.content,
+          fact.subjects,
+        );
+        if (embedding != null) {
+          final updatedFact = Fact(
+            id: fact.id,
+            content: fact.content,
+            sourceId: fact.sourceId,
+            subjects: fact.subjects,
+            imageUrl: fact.imageUrl,
+            ocrText: fact.ocrText,
+            createdAt: fact.createdAt,
+            updatedAt: DateTime.now(),
+            repetitions: fact.repetitions,
+            easeFactor: fact.easeFactor,
+            interval: fact.interval,
+            nextReviewAt: fact.nextReviewAt,
+            embedding: embedding,
+          );
+          await provider.updateFact(updatedFact);
+          successCount++;
+        }
+      } catch (e) {
+        debugPrint('Failed to generate embedding for fact ${fact.id}: $e');
+      }
+
+      if (mounted) {
+        setState(() => _batchProgress++);
+      }
+      
+      // Small delay to avoid rate limiting
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    if (mounted) {
+      setState(() => _isGeneratingBatch = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Generated $successCount of ${factsWithoutEmbeddings.length} embeddings'),
+        ),
+      );
     }
   }
 }

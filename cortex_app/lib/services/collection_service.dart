@@ -1,9 +1,64 @@
 import '../models/fact.dart';
 import '../models/fact_link.dart';
 import '../models/smart_collection.dart';
+import 'embedding_service.dart';
+import 'graph_analysis_service.dart';
 
 /// Service for executing smart collection filters
 class CollectionService {
+  final GraphAnalysisService _analysisService;
+  
+  CollectionService() : _analysisService = GraphAnalysisService(EmbeddingService());
+
+  /// Generate dynamic collections based on graph analysis
+  Future<List<SmartCollection>> generateDynamicCollections(
+    List<Fact> facts, 
+    List<FactLink> links,
+  ) async {
+    final collections = <SmartCollection>[];
+    
+    // 1. Semantic Clusters
+    final semanticClusters = await _analysisService.findSemanticClusters(facts, threshold: 0.8);
+    for (final cluster in semanticClusters) {
+      collections.add(SmartCollection.dynamic(
+        id: cluster.id,
+        name: cluster.label,
+        type: CollectionType.cluster,
+        icon: 'bubble_chart',
+        params: {'factCount': cluster.factIds.length.toString()},
+        filters: [
+          CollectionFilter(
+            field: FilterField.id,
+            operator: FilterOperator.isIn,
+            value: cluster.factIds.join(','),
+          ),
+        ],
+      ));
+    }
+    
+    // 2. Structural Islands
+    final islands = _analysisService.findConnectedComponents(facts, links);
+    for (final island in islands) {
+      if (island.factIds.length < 2) continue; // Skip singletons
+      
+      collections.add(SmartCollection.dynamic(
+        id: island.id,
+        name: island.label,
+        type: CollectionType.structure,
+        icon: 'share',
+        params: {'factCount': island.factIds.length.toString()},
+        filters: [
+          CollectionFilter(
+            field: FilterField.id,
+            operator: FilterOperator.isIn,
+            value: island.factIds.join(','),
+          ),
+        ],
+      ));
+    }
+    
+    return collections;
+  }
   /// Execute filters on a list of facts
   List<Fact> executeFilters(
     List<Fact> facts,
@@ -68,9 +123,18 @@ class CollectionService {
   bool _matchesFilter(Fact fact, CollectionFilter filter, List<FactLink> allLinks) {
     switch (filter.field) {
       case FilterField.source:
+        if (filter.operator == FilterOperator.isIn) {
+          final sources = filter.value.split(',');
+          return sources.contains(fact.sourceId);
+        }
         return _matchString(fact.sourceId, filter.operator, filter.value);
       
       case FilterField.subject:
+        if (filter.operator == FilterOperator.isIn) {
+          final tags = filter.value.split(',').map((t) => t.toLowerCase()).toSet();
+          // Match if fact has ANY of the selected tags
+          return fact.subjects.any((s) => tags.contains(s.toLowerCase()));
+        }
         switch (filter.operator) {
           case FilterOperator.contains:
             return fact.subjects.any((s) => 
@@ -99,6 +163,13 @@ class CollectionService {
       
       case FilterField.content:
         return _matchString(fact.content, filter.operator, filter.value);
+        
+      case FilterField.id:
+        if (filter.operator == FilterOperator.isIn) {
+          final ids = filter.value.split(',');
+          return ids.contains(fact.id);
+        }
+        return _matchString(fact.id, filter.operator, filter.value);
     }
   }
   

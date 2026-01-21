@@ -13,11 +13,13 @@ class AddSourceScreen extends StatefulWidget {
 class _AddSourceScreenState extends State<AddSourceScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _urlController = TextEditingController();
   SourceType _selectedType = SourceType.book;
 
   @override
   void dispose() {
     _nameController.dispose();
+    _urlController.dispose();
     super.dispose();
   }
 
@@ -47,6 +49,16 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
                 return null;
               },
               autofocus: true,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _urlController,
+              decoration: const InputDecoration(
+                labelText: 'Link (Optional)',
+                hintText: 'https://...',
+                prefixIcon: Icon(Icons.link),
+              ),
+              keyboardType: TextInputType.url,
             ),
             const SizedBox(height: 24),
             Text(
@@ -131,6 +143,7 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
       await context.read<DataProvider>().addSource(
         name: _nameController.text.trim(),
         type: _selectedType,
+        url: _urlController.text.trim().isEmpty ? null : _urlController.text.trim(),
       );
       if (mounted) {
         Navigator.pop(context);
