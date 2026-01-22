@@ -33,5 +33,9 @@ CHROME_EXTENSION_PLAN.md
 *_PLAN.md
 *_TODO.md
 
+
 # Local Netlify folder
 .netlify
+
+# Agent
+.agent/
