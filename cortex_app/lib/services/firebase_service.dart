@@ -106,6 +106,8 @@ class FirebaseService {
     await _sourcesCollection.doc(source.id).set({
       'name': source.name,
       'type': source.type.name,
+      'url': source.url,
+      'isCluster': source.isCluster,
       'metadata': metadata ?? {},
       'createdAt': Timestamp.fromDate(source.createdAt),
       'updatedAt': Timestamp.fromDate(source.updatedAt),
@@ -122,6 +124,8 @@ class FirebaseService {
     final updateData = {
       'name': source.name,
       'type': source.type.name,
+      'url': source.url,
+      'isCluster': source.isCluster,
       'updatedAt': Timestamp.now(),
     };
 
@@ -171,6 +175,7 @@ class FirebaseService {
       'createdAt': Timestamp.fromDate(fact.createdAt),
       'updatedAt': Timestamp.fromDate(fact.updatedAt),
       'embedding': fact.embedding,
+      'url': fact.url,
     });
   }
 
@@ -189,6 +194,7 @@ class FirebaseService {
           : null,
       'updatedAt': Timestamp.now(),
       'embedding': fact.embedding,
+      'url': fact.url,
     });
   }
 
@@ -243,6 +249,8 @@ class FirebaseService {
       batch.set(docRef, {
         'name': source.name,
         'type': source.type.name,
+        'url': source.url,
+        'isCluster': source.isCluster,
         'metadata': {}, // Empty metadata for sources created in Flutter app
         'createdAt': Timestamp.fromDate(source.createdAt),
         'updatedAt': Timestamp.fromDate(source.updatedAt),
@@ -267,6 +275,7 @@ class FirebaseService {
         'createdAt': Timestamp.fromDate(fact.createdAt),
         'updatedAt': Timestamp.fromDate(fact.updatedAt),
         'embedding': fact.embedding,
+        'url': fact.url,
       }, SetOptions(merge: true));
     }
 
@@ -290,6 +299,8 @@ class FirebaseService {
         ),
         createdAt: (data['createdAt'] as Timestamp).toDate(),
         updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+        url: data['url'] as String?,
+        isCluster: data['isCluster'] ?? false,
       );
       // Note: metadata field is ignored in Flutter app's Source model
     }).toList();
@@ -315,6 +326,7 @@ class FirebaseService {
         embedding: data['embedding'] != null
             ? List<double>.from((data['embedding'] as List).map((e) => (e as num).toDouble()))
             : null,
+        url: data['url'],
       );
     }).toList();
 
@@ -353,6 +365,8 @@ class FirebaseService {
               ),
               createdAt: (data['createdAt'] as Timestamp).toDate(),
               updatedAt: (data['updatedAt'] as Timestamp).toDate(),
+              url: data['url'] as String?,
+              isCluster: data['isCluster'] ?? false,
             );
             // Note: metadata field is ignored in Flutter app's Source model
           }).toList();
@@ -401,6 +415,7 @@ class FirebaseService {
           embedding: data['embedding'] != null
               ? List<double>.from((data['embedding'] as List).map((e) => (e as num).toDouble()))
               : null,
+          url: data['url'],
         );
       }).toList();
     });

@@ -28,5 +28,30 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.cortex.cortexApp</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>cortex</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.googleusercontent.apps.37637573970-u9a3c0qcgm2q2jtrkfvonchbl88f6jgc</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.37637573970-u9a3c0qcgm2q2jtrkfvonchbl88f6jgc</string>
+			</array>
+		</dict>
+	</array>
+	<key>GIDClientID</key>
+	<string>37637573970-u9a3c0qcgm2q2jtrkfvonchbl88f6jgc.apps.googleusercontent.com</string>
 </dict>
 </plist>

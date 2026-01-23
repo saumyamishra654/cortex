@@ -4,7 +4,7 @@ import '../models/source.dart';
 import '../providers/data_provider.dart';
 import '../widgets/fact_card.dart';
 import 'add_fact_screen.dart';
-import 'edit_source_screen.dart';
+import 'add_source_screen.dart';
 import 'edit_fact_screen.dart';
 
 class SourceDetailScreen extends StatelessWidget {
@@ -37,7 +37,7 @@ class SourceDetailScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => EditSourceScreen(source: currentSource),
+                  builder: (_) => AddSourceScreen(source: currentSource),
                 ),
               );
             },

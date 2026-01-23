@@ -96,7 +96,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   );
                 },
-                onLongPress: () => _showDeleteDialog(context, source),
+                onLongPress: () => _showOptionsSheet(context, source),
               );
             },
           );
@@ -120,7 +120,49 @@ class HomeScreen extends StatelessWidget {
     );
   }
   
-  void _showDeleteDialog(BuildContext context, Source source) {
+  void _showOptionsSheet(BuildContext context, Source source) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit_rounded),
+              title: const Text('Edit Source'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddSourceScreen(source: source),
+                  ),
+                );
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_rounded,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                'Delete Source',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showDeleteConfirmDialog(context, source);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmDialog(BuildContext context, Source source) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

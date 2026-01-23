@@ -101,35 +101,174 @@ class _KnowledgeGraphState extends State<KnowledgeGraph> {
       );
     }
     
-    return GestureDetector(
-      onScaleUpdate: (details) {
-        setState(() {
-          _scale = (_scale * details.scale).clamp(0.3, 3.0);
-          _panOffset = _panOffset + details.focalPointDelta;
-        });
-      },
-      child: ClipRect(
-        child: CustomPaint(
-          painter: _GraphPainter(
-            nodes: widget.graphData.nodes,
-            edges: widget.graphData.edges,
-            positions: _positions.map((k, v) => MapEntry(k, 
-                Offset(v.dx * _scale + _panOffset.dx, 
-                       v.dy * _scale + _panOffset.dy))),
-            sources: widget.sources,
-            highlightedId: widget.highlightedId,
-            hoveredId: _hoveredNodeId,
-            isDark: isDark,
-            showLabels: widget.showLabels,
-            scale: _scale,
-          ),
-          child: GestureDetector(
-            onTapUp: (details) {
-              final tappedNode = _findNodeAt(details.localPosition);
-              if (tappedNode != null && widget.onNodeTap != null) {
-                widget.onNodeTap!(tappedNode.fact);
-              }
+    return Stack(
+      children: [
+        GestureDetector(
+          onScaleUpdate: (details) {
+            setState(() {
+              _scale = (_scale * details.scale).clamp(0.3, 3.0);
+              _panOffset = _panOffset + details.focalPointDelta;
+            });
+          },
+          child: MouseRegion(
+            onHover: (event) {
+              final hoveredNode = _findNodeAt(event.localPosition);
+              setState(() {
+                _hoveredNodeId = hoveredNode?.id;
+              });
             },
+            onExit: (_) {
+              setState(() {
+                _hoveredNodeId = null;
+              });
+            },
+            child: ClipRect(
+              child: CustomPaint(
+                painter: _GraphPainter(
+                  nodes: widget.graphData.nodes,
+                  edges: widget.graphData.edges,
+                  positions: _positions.map((k, v) => MapEntry(k, 
+                      Offset(v.dx * _scale + _panOffset.dx, 
+                             v.dy * _scale + _panOffset.dy))),
+                  sources: widget.sources,
+                  highlightedId: widget.highlightedId,
+                  hoveredId: _hoveredNodeId,
+                  isDark: isDark,
+                  showLabels: widget.showLabels,
+                  scale: _scale,
+                ),
+                child: GestureDetector(
+                  onTapUp: (details) {
+                    final tappedNode = _findNodeAt(details.localPosition);
+                    if (tappedNode != null && widget.onNodeTap != null) {
+                      widget.onNodeTap!(tappedNode.fact);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Hover Tooltip
+        if (_hoveredNodeId != null) _buildTooltip(theme),
+      ],
+    );
+  }
+
+  Widget _buildTooltip(ThemeData theme) {
+    if (_hoveredNodeId == null || _positions[_hoveredNodeId] == null) return const SizedBox();
+
+    final node = widget.graphData.nodes.firstWhere((n) => n.id == _hoveredNodeId);
+    final rawPos = _positions[_hoveredNodeId]!;
+    final screenPos = Offset(
+      rawPos.dx * _scale + _panOffset.dx,
+      rawPos.dy * _scale + _panOffset.dy,
+    );
+    
+    final source = widget.sources[node.fact.sourceId];
+
+    return Positioned(
+      left: screenPos.dx + 15,
+      top: screenPos.dy + 15,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(
+              color: theme.colorScheme.outline.withValues(alpha: 0.1),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Source Type Badge
+              if (source != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getSourceIcon(source.type),
+                        size: 14, 
+                        color: theme.colorScheme.onSecondaryContainer
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        source.typeLabel,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+              // Fact Content
+              Text(
+                node.fact.displayText,
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  height: 1.4,
+                ),
+              ),
+              
+              // Tags
+              if (node.fact.subjects.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: node.fact.subjects.take(3).map((tag) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: theme.colorScheme.tertiary.withValues(alpha: 0.2),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Text(
+                      '#$tag',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.tertiary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  )).toList(),
+                ),
+                if (node.fact.subjects.length > 3)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '+${node.fact.subjects.length - 3} more',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+              ],
+            ],
           ),
         ),
       ),
@@ -152,6 +291,35 @@ class _KnowledgeGraphState extends State<KnowledgeGraph> {
       }
     }
     return null;
+  }
+  IconData _getSourceIcon(SourceType type) {
+    switch (type) {
+      case SourceType.book:
+        return Icons.menu_book;
+      case SourceType.article:
+        return Icons.article;
+      case SourceType.podcast:
+        return Icons.mic;
+      case SourceType.video:
+        return Icons.videocam;
+      case SourceType.conversation:
+        return Icons.forum;
+      case SourceType.course:
+        return Icons.school;
+      case SourceType.research_paper:
+        return Icons.science;
+      case SourceType.audiobook:
+        return Icons.headset;
+      case SourceType.reels:
+        return Icons.ondemand_video;
+      case SourceType.social_post:
+        return Icons.public;
+      case SourceType.document:
+        return Icons.description;
+      case SourceType.other:
+      default:
+        return Icons.link;
+    }
   }
 }
 

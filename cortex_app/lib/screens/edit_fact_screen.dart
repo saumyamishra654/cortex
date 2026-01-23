@@ -16,6 +16,7 @@ class EditFactScreen extends StatefulWidget {
 class _EditFactScreenState extends State<EditFactScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _contentController;
+  late TextEditingController _urlController;
   final _subjectController = TextEditingController();
   late List<String> _selectedSubjects;
   late String _selectedSourceId;
@@ -24,6 +25,7 @@ class _EditFactScreenState extends State<EditFactScreen> {
   void initState() {
     super.initState();
     _contentController = TextEditingController(text: widget.fact.content);
+    _urlController = TextEditingController(text: widget.fact.url ?? '');
     _selectedSubjects = List.from(widget.fact.subjects);
     _selectedSourceId = widget.fact.sourceId;
   }
@@ -31,6 +33,7 @@ class _EditFactScreenState extends State<EditFactScreen> {
   @override
   void dispose() {
     _contentController.dispose();
+    _urlController.dispose();
     _subjectController.dispose();
     super.dispose();
   }
@@ -61,6 +64,7 @@ class _EditFactScreenState extends State<EditFactScreen> {
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: _selectedSourceId,
+              isExpanded: true,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: provider.sources.map((source) {
                 return DropdownMenuItem(
@@ -69,7 +73,12 @@ class _EditFactScreenState extends State<EditFactScreen> {
                     children: [
                       Icon(_getSourceIcon(source.type), size: 20),
                       const SizedBox(width: 8),
-                      Text(source.name),
+                      Expanded(
+                        child: Text(
+                          source.name,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -102,6 +111,20 @@ class _EditFactScreenState extends State<EditFactScreen> {
                 }
                 return null;
               },
+            ),
+            const SizedBox(height: 16),
+
+            // URL input
+            TextFormField(
+              controller: _urlController,
+              decoration: const InputDecoration(
+                labelText: 'Source URL',
+                prefixIcon: Icon(Icons.link_rounded),
+                hintText: 'https://...',
+                isDense: true,
+              ),
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+              maxLines: 1,
             ),
             const SizedBox(height: 24),
 
@@ -247,6 +270,7 @@ class _EditFactScreenState extends State<EditFactScreen> {
         nextReviewAt: widget.fact.nextReviewAt,
         // Clear embedding if content or subjects changed
         embedding: shouldClearEmbedding ? null : widget.fact.embedding,
+        url: _urlController.text.trim().isEmpty ? null : _urlController.text.trim(),
       );
 
       await context.read<DataProvider>().updateFact(updatedFact);

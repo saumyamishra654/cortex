@@ -52,6 +52,9 @@ class Source extends HiveObject {
   @HiveField(5)
   String? url;
 
+  @HiveField(6, defaultValue: false)
+  bool isCluster;
+
   Source({
     required this.id,
     required this.name,
@@ -59,6 +62,7 @@ class Source extends HiveObject {
     required this.createdAt,
     required this.updatedAt,
     this.url,
+    this.isCluster = false,
   });
 
   /// Create a new source with auto-generated timestamps
@@ -67,6 +71,7 @@ class Source extends HiveObject {
     required String name,
     required SourceType type,
     String? url,
+    bool isCluster = false,
   }) {
     final now = DateTime.now();
     return Source(
@@ -76,6 +81,7 @@ class Source extends HiveObject {
       createdAt: now,
       updatedAt: now,
       url: url,
+      isCluster: isCluster,
     );
   }
 

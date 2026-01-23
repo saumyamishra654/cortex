@@ -60,6 +60,31 @@ class FactCard extends StatelessWidget {
                   );
                 },
               ),
+              if (fact.url != null && fact.url!.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.link_rounded,
+                      size: 14,
+                      color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        fact.url!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.7),
+                          fontFamily: 'monospace',
+                          fontSize: 10,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (fact.subjects.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Wrap(

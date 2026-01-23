@@ -186,21 +186,33 @@ class EmbeddingService {
   }) async {
     if (targetFact.embedding == null) return [];
     
+    // Create a map for quick lookup later
+    final factsMap = {for (final f in allFacts) f.id: f};
+    
     // Use compute() on non-web platforms for background processing
     if (!kIsWeb) {
-      return compute(
+      final results = await compute(
         _findRelatedFactsIsolate,
         _FindRelatedFactsParams(
           targetEmbedding: targetFact.embedding!,
           targetId: targetFact.id,
+          // Only pass essential primitive data to isolate
           factsData: allFacts
               .where((f) => f.embedding != null && f.id != targetFact.id)
-              .map((f) => _FactEmbeddingData(id: f.id, embedding: f.embedding!, fact: f))
+              .map((f) => _FactEmbeddingData(id: f.id, embedding: f.embedding!))
               .toList(),
           limit: limit,
           threshold: threshold,
         ),
       );
+      
+      // Rehydrate Fact objects from IDs on the main thread
+      return results.map((result) {
+        final fact = factsMap[result.factId];
+        // Skip consistency checks for now, if fact missing just skip
+        if (fact == null) return null;
+        return RelatedFact(fact: fact, similarity: result.similarity);
+      }).whereType<RelatedFact>().toList();
     }
     
     // Fallback for web (no isolate support)
@@ -245,8 +257,8 @@ class EmbeddingService {
 }
 
 /// Top-level function for compute() isolate
-List<RelatedFact> _findRelatedFactsIsolate(_FindRelatedFactsParams params) {
-  final results = <RelatedFact>[];
+List<_RelatedFactResult> _findRelatedFactsIsolate(_FindRelatedFactsParams params) {
+  final results = <_RelatedFactResult>[];
   
   for (final factData in params.factsData) {
     final similarity = EmbeddingService.cosineSimilarity(
@@ -255,7 +267,7 @@ List<RelatedFact> _findRelatedFactsIsolate(_FindRelatedFactsParams params) {
     );
     
     if (similarity >= params.threshold) {
-      results.add(RelatedFact(fact: factData.fact, similarity: similarity));
+      results.add(_RelatedFactResult(factId: factData.id, similarity: similarity));
     }
   }
   
@@ -280,16 +292,25 @@ class _FindRelatedFactsParams {
   });
 }
 
-/// Lightweight data class for passing to isolate
+/// Lightweight data class for passing to isolate (no HiveObject)
 class _FactEmbeddingData {
   final String id;
   final List<double> embedding;
-  final Fact fact;
   
   _FactEmbeddingData({
     required this.id,
     required this.embedding,
-    required this.fact,
+  });
+}
+
+/// Lightweight result from isolate
+class _RelatedFactResult {
+  final String factId;
+  final double similarity;
+  
+  _RelatedFactResult({
+    required this.factId,
+    required this.similarity,
   });
 }
 

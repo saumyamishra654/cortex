@@ -291,8 +291,15 @@ class DataProvider extends ChangeNotifier {
     required String name,
     required SourceType type,
     String? url,
+    bool isCluster = false,
   }) async {
-    final source = Source.create(id: _uuid.v4(), name: name, type: type, url: url);
+    final source = Source.create(
+      id: _uuid.v4(),
+      name: name,
+      type: type,
+      url: url,
+      isCluster: isCluster,
+    );
 
     // Save locally
     await _storage.saveSource(source);
@@ -318,6 +325,7 @@ class DataProvider extends ChangeNotifier {
     List<String>? subjects,
     String? imageUrl,
     String? ocrText,
+    String? url,
   }) async {
     final fact = Fact.create(
       id: _uuid.v4(),
@@ -326,6 +334,7 @@ class DataProvider extends ChangeNotifier {
       subjects: subjects,
       imageUrl: imageUrl,
       ocrText: ocrText,
+      url: url,
     );
 
     // Save locally

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'providers/data_provider.dart';
 import 'services/storage_service.dart';
 import 'services/firebase_service.dart';
+import 'services/deep_link_service.dart';
+import 'models/source.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
 import 'screens/review_screen.dart';
@@ -11,6 +14,7 @@ import 'screens/collections_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/splash_screen.dart';
+import 'widgets/capture_dialog.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +36,13 @@ class _CortexAppState extends State<CortexApp> {
   
   late final HiveStorageService _storage;
   late final DataProvider _dataProvider;
+  late final DeepLinkService _deepLinkService;
+  
+  // Pending capture request (waiting for auth)
+  CaptureRequest? _pendingCapture;
+  
+  // Navigator key for showing dialogs
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
 
   @override
@@ -50,8 +61,32 @@ class _CortexAppState extends State<CortexApp> {
     _dataProvider = DataProvider(_storage);
     await _dataProvider.init();
     
+    // Initialize deep link service
+    _deepLinkService = DeepLinkService();
+    final initialCapture = await _deepLinkService.init();
+    
+    // Listen for capture requests
+    _deepLinkService.captureStream.listen(_handleCaptureRequest);
+    
     // Check auth state
     _showAuth = !FirebaseService.isSignedIn;
+    
+    // Handle initial capture (app opened via deep link)
+    if (initialCapture != null) {
+      if (FirebaseService.isSignedIn) {
+        // Show dialog after build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showCaptureDialog(initialCapture);
+        });
+      } else {
+        // Store for after auth
+        _pendingCapture = initialCapture;
+        await _savePendingCapture(initialCapture);
+      }
+    } else {
+      // Check for pending capture from previous session
+      await _loadPendingCapture();
+    }
     
     // If signed in, start Firebase listeners
     if (FirebaseService.isSignedIn) {
@@ -64,6 +99,14 @@ class _CortexAppState extends State<CortexApp> {
       if (user != null) {
         setState(() => _showAuth = false);
         _dataProvider.startFirebaseListeners();
+        // Show pending capture after auth
+        if (_pendingCapture != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showCaptureDialog(_pendingCapture!);
+            _pendingCapture = null;
+            _clearPendingCapture();
+          });
+        }
       } else {
         setState(() => _showAuth = true);
         _dataProvider.stopFirebaseListeners();
@@ -71,6 +114,72 @@ class _CortexAppState extends State<CortexApp> {
     });
     
     setState(() => _isInitializing = false);
+  }
+  
+  void _handleCaptureRequest(CaptureRequest request) {
+    if (!mounted) return;
+    
+    if (FirebaseService.isSignedIn) {
+      _showCaptureDialog(request);
+    } else {
+      _pendingCapture = request;
+      _savePendingCapture(request);
+    }
+  }
+  
+  void _showCaptureDialog(CaptureRequest request) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _navigatorKey.currentContext;
+      if (context != null) {
+        CaptureDialog.show(context, request);
+      }
+    });
+  }
+  
+  Future<void> _savePendingCapture(CaptureRequest request) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pending_capture_text', request.text);
+    if (request.sourceUrl != null) {
+      await prefs.setString('pending_capture_url', request.sourceUrl!);
+    }
+    if (request.sourceTitle != null) {
+      await prefs.setString('pending_capture_title', request.sourceTitle!);
+    }
+    await prefs.setString('pending_capture_type', request.suggestedType.name);
+  }
+  
+  Future<void> _loadPendingCapture() async {
+    final prefs = await SharedPreferences.getInstance();
+    final text = prefs.getString('pending_capture_text');
+    if (text != null && text.isNotEmpty && FirebaseService.isSignedIn) {
+      _pendingCapture = CaptureRequest(
+        text: text,
+        sourceUrl: prefs.getString('pending_capture_url'),
+        sourceTitle: prefs.getString('pending_capture_title'),
+        suggestedType: _parseSourceType(prefs.getString('pending_capture_type')),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showCaptureDialog(_pendingCapture!);
+        _pendingCapture = null;
+        _clearPendingCapture();
+      });
+    }
+  }
+  
+  SourceType _parseSourceType(String? name) {
+    if (name == null) return SourceType.other;
+    return SourceType.values.firstWhere(
+      (t) => t.name == name,
+      orElse: () => SourceType.other,
+    );
+  }
+  
+  Future<void> _clearPendingCapture() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('pending_capture_text');
+    await prefs.remove('pending_capture_url');
+    await prefs.remove('pending_capture_title');
+    await prefs.remove('pending_capture_type');
   }
 
   void _toggleTheme() {
@@ -103,6 +212,7 @@ class _CortexAppState extends State<CortexApp> {
     return ChangeNotifierProvider.value(
       value: _dataProvider,
       child: MaterialApp(
+        navigatorKey: _navigatorKey,
         title: 'Cortex',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,

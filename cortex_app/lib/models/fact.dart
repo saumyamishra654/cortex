@@ -46,6 +46,9 @@ class Fact extends HiveObject {
   @HiveField(12)
   List<double>? embedding;
 
+  @HiveField(13)
+  String? url;
+
   Fact({
     required this.id,
     required this.content,
@@ -60,6 +63,7 @@ class Fact extends HiveObject {
     this.interval = 0,
     this.nextReviewAt,
     this.embedding,
+    this.url,
   });
 
   /// Create a new fact with defaults
@@ -70,6 +74,7 @@ class Fact extends HiveObject {
     List<String>? subjects,
     String? imageUrl,
     String? ocrText,
+    String? url,
   }) {
     final now = DateTime.now();
     return Fact(
@@ -85,6 +90,7 @@ class Fact extends HiveObject {
       easeFactor: 2.5,
       interval: 0,
       nextReviewAt: now, // Due immediately
+      url: url,
     );
   }
 
