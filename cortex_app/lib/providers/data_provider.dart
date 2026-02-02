@@ -29,6 +29,10 @@ class DataProvider extends ChangeNotifier {
   bool _isLoading = true;
   bool _isSyncing = false;
 
+  // PDF Session Management
+  String? _activePdfSourceId;
+  String? get activePdfSourceId => _activePdfSourceId;
+
   StreamSubscription? _sourcesSubscription;
   StreamSubscription? _factsSubscription;
   StreamSubscription? _collectionsSubscription;
@@ -286,12 +290,39 @@ class DataProvider extends ChangeNotifier {
     return _factsMap.values.where((f) => f.sourceId == sourceId).length;
   }
 
+  /// Start a PDF reading session for a source
+  void startPdfSession(String sourceId) {
+    if (_activePdfSourceId == sourceId) return;
+    _activePdfSourceId = sourceId;
+    debugPrint('PDF Session STARTED for source: $sourceId');
+    notifyListeners();
+  }
+
+  /// Stop the current PDF reading session
+  void stopPdfSession() {
+    if (_activePdfSourceId != null) {
+      debugPrint('PDF Session STOPPED for source: $_activePdfSourceId');
+      _activePdfSourceId = null;
+      notifyListeners();
+    }
+  }
+
+  /// Find an existing source by file path
+  Source? findSourceByFilePath(String filePath) {
+    return _sourcesMap.values.cast<Source?>().firstWhere(
+      (s) => s?.filePath == filePath,
+      orElse: () => null,
+    );
+  }
+
   /// Add a new source
   Future<Source> addSource({
     required String name,
     required SourceType type,
     String? url,
     bool isCluster = false,
+    String? filePath,
+    List<String>? defaultTags,
   }) async {
     final source = Source.create(
       id: _uuid.v4(),
@@ -299,6 +330,8 @@ class DataProvider extends ChangeNotifier {
       type: type,
       url: url,
       isCluster: isCluster,
+      filePath: filePath,
+      defaultTags: defaultTags,
     );
 
     // Save locally
@@ -327,11 +360,17 @@ class DataProvider extends ChangeNotifier {
     String? ocrText,
     String? url,
   }) async {
+    // If source exists, merge its default tags
+    final source = _sourcesMap[sourceId];
+    final mergedSubjects = <String>{};
+    if (subjects != null) mergedSubjects.addAll(subjects);
+    if (source != null) mergedSubjects.addAll(source.defaultTags);
+
     final fact = Fact.create(
       id: _uuid.v4(),
       content: content,
       sourceId: sourceId,
-      subjects: subjects,
+      subjects: mergedSubjects.toList(),
       imageUrl: imageUrl,
       ocrText: ocrText,
       url: url,
@@ -583,6 +622,38 @@ class DataProvider extends ChangeNotifier {
     }
     
     notifyListeners();
+  }
+
+  /// Search sources by name or tags
+  List<Source> searchSources(String query) {
+    if (query.isEmpty) return [];
+    
+    final lowercaseQuery = query.toLowerCase();
+    
+    return sources.where((source) {
+      final nameMatch = source.name.toLowerCase().contains(lowercaseQuery);
+      final tagMatch = source.defaultTags.any(
+        (tag) => tag.toLowerCase().contains(lowercaseQuery),
+      );
+      return nameMatch || tagMatch;
+    }).toList();
+  }
+
+  /// Search facts by content, subjects, or OCR text
+  List<Fact> searchFacts(String query) {
+    if (query.isEmpty) return [];
+    
+    final lowercaseQuery = query.toLowerCase();
+    
+    return facts.where((fact) {
+      final contentMatch = fact.content.toLowerCase().contains(lowercaseQuery);
+      final subjectMatch = fact.subjects.any(
+        (subject) => subject.toLowerCase().contains(lowercaseQuery),
+      );
+      final ocrMatch = fact.ocrText?.toLowerCase().contains(lowercaseQuery) ?? false;
+      
+      return contentMatch || subjectMatch || ocrMatch;
+    }).toList();
   }
 
   @override

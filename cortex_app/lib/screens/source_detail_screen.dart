@@ -6,8 +6,9 @@ import '../widgets/fact_card.dart';
 import 'add_fact_screen.dart';
 import 'add_source_screen.dart';
 import 'edit_fact_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class SourceDetailScreen extends StatelessWidget {
+class SourceDetailScreen extends StatefulWidget {
   final Source source;
 
   const SourceDetailScreen({
@@ -16,20 +17,71 @@ class SourceDetailScreen extends StatelessWidget {
   });
 
   @override
+  State<SourceDetailScreen> createState() => _SourceDetailScreenState();
+}
+
+class _SourceDetailScreenState extends State<SourceDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Start session if it's a PDF source
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.source.filePath != null) {
+        context.read<DataProvider>().startPdfSession(widget.source.id);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Stop session when leaving
+    context.read<DataProvider>().stopPdfSession();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final provider = context.watch<DataProvider>();
     
     // Get the latest source data (in case it was updated)
-    final currentSource = provider.sources.firstWhere(
-      (s) => s.id == source.id,
-      orElse: () => source,
-    );
+    final currentSource = provider.sources.cast<Source?>().firstWhere(
+      (s) => s?.id == widget.source.id,
+      orElse: () => widget.source,
+    )!;
     
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(currentSource.name),
+    final isSessionActive = provider.activePdfSourceId == currentSource.id;
+    
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          debugPrint('🏠 SourceDetailScreen popped, stopping PDF session');
+          provider.stopPdfSession();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(currentSource.name),
+            if (isSessionActive)
+              Text(
+                'Active PDF Session',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+          ],
+        ),
         actions: [
+          if (currentSource.filePath != null)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_rounded),
+              tooltip: 'Open PDF',
+              onPressed: () => _openPdf(currentSource.filePath!),
+            ),
           IconButton(
             icon: const Icon(Icons.edit_rounded),
             tooltip: 'Edit Source',
@@ -65,7 +117,7 @@ class SourceDetailScreen extends StatelessWidget {
       ),
       body: Consumer<DataProvider>(
         builder: (context, provider, child) {
-          final facts = provider.getFactsForSource(source.id);
+          final facts = provider.getFactsForSource(currentSource.id);
           
           if (facts.isEmpty) {
             return Center(
@@ -161,14 +213,31 @@ class SourceDetailScreen extends StatelessWidget {
         onPressed: () => _navigateToAddFact(context),
         child: const Icon(Icons.add_rounded),
       ),
-    );
+    ),
+  );
+}
+
+  Future<void> _openPdf(String path) async {
+    final uri = Uri.file(path);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+      if (mounted) {
+        context.read<DataProvider>().startPdfSession(widget.source.id);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open PDF: $path')),
+        );
+      }
+    }
   }
 
   void _navigateToAddFact(BuildContext context) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AddFactScreen(source: source),
+        builder: (_) => AddFactScreen(source: widget.source),
       ),
     );
   }

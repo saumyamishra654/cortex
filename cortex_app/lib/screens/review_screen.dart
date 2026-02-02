@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/fact.dart';
+import '../models/source.dart';
 import '../providers/data_provider.dart';
 import '../services/srs_service.dart';
 import '../widgets/flashcard.dart';
@@ -20,6 +21,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   int _currentIndex = 0;
   ReviewMode _mode = ReviewMode.shuffle; // Default to shuffle so cards always show
   String? _selectedTag;
+  String? _selectedSourceId;
 
   @override
   @override
@@ -50,6 +52,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
         facts = facts.where((f) => f.subjects.contains(_selectedTag)).toList();
       }
       
+      // Filter by source if selected
+      if (_selectedSourceId != null) {
+        facts = facts.where((f) => f.sourceId == _selectedSourceId).toList();
+      }
+      
       _facts = facts;
       _currentIndex = 0;
     });
@@ -63,8 +70,74 @@ class _ReviewScreenState extends State<ReviewScreen> {
     
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectedTag != null ? 'Review: $_selectedTag' : 'Review'),
+        title: Text(_selectedTag != null || _selectedSourceId != null ? 'Filtered Review' : 'Review'),
         actions: [
+          if (_selectedTag != null || _selectedSourceId != null)
+            IconButton(
+              icon: const Icon(Icons.filter_alt_off_rounded),
+              tooltip: 'Clear All Filters',
+              onPressed: () {
+                setState(() {
+                  _selectedTag = null;
+                  _selectedSourceId = null;
+                });
+                _loadFacts();
+              },
+            ),
+          // Source filter
+          PopupMenuButton<String?>(
+            icon: Badge(
+              isLabelVisible: _selectedSourceId != null,
+              child: const Icon(Icons.library_books_rounded),
+            ),
+            tooltip: 'Filter by Source',
+            onSelected: (sourceId) {
+              setState(() {
+                // Toggle behavior: Clicking the active source deselects it
+                _selectedSourceId = _selectedSourceId == sourceId ? null : sourceId;
+              });
+              _loadFacts();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: null,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.all_inbox_rounded,
+                      color: _selectedSourceId == null 
+                          ? theme.colorScheme.primary 
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('All Sources'),
+                    if (_selectedSourceId == null) ...[
+                      const Spacer(),
+                      Icon(Icons.check, color: theme.colorScheme.primary),
+                    ],
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              ...provider.sources.map((source) => PopupMenuItem(
+                value: source.id,
+                child: Row(
+                  children: [
+                    Icon(
+                      _getSourceIcon(source.type),
+                      color: _selectedSourceId == source.id 
+                          ? theme.colorScheme.primary 
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(source.name, overflow: TextOverflow.ellipsis)),
+                    if (_selectedSourceId == source.id) 
+                      Icon(Icons.check, color: theme.colorScheme.primary),
+                  ],
+                ),
+              )),
+            ],
+          ),
           // Tag filter
           PopupMenuButton<String?>(
             icon: Badge(
@@ -74,7 +147,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
             tooltip: 'Filter by Tag',
             onSelected: (tag) {
               setState(() {
-                _selectedTag = tag;
+                // Toggle behavior: Clicking the active tag deselects it
+                _selectedTag = _selectedTag == tag ? null : tag;
               });
               _loadFacts();
             },
@@ -239,11 +313,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
               onPressed: () {
                 setState(() {
                   _selectedTag = null;
+                  _selectedSourceId = null;
                 });
                 _loadFacts();
               },
-              icon: const Icon(Icons.clear_rounded),
-              label: const Text('Clear Filter'),
+              icon: const Icon(Icons.clear_all_rounded),
+              label: const Text('Clear All Filters'),
             ),
           ],
         ),
@@ -283,5 +358,22 @@ class _ReviewScreenState extends State<ReviewScreen> {
     setState(() {
       _currentIndex++;
     });
+  }
+
+  IconData _getSourceIcon(SourceType type) {
+    switch (type) {
+      case SourceType.book: return Icons.menu_book_rounded;
+      case SourceType.article: return Icons.article_rounded;
+      case SourceType.podcast: return Icons.podcasts_rounded;
+      case SourceType.video: return Icons.video_library_rounded;
+      case SourceType.conversation: return Icons.chat_rounded;
+      case SourceType.course: return Icons.school_rounded;
+      case SourceType.research_paper: return Icons.science_rounded;
+      case SourceType.audiobook: return Icons.headphones_rounded;
+      case SourceType.reels: return Icons.smartphone_rounded;
+      case SourceType.social_post: return Icons.public_rounded;
+      case SourceType.document: return Icons.description_rounded;
+      case SourceType.other: return Icons.folder_rounded;
+    }
   }
 }

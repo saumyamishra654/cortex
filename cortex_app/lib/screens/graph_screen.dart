@@ -17,6 +17,7 @@ class GraphScreen extends StatefulWidget {
 
 class _GraphScreenState extends State<GraphScreen> {
   bool _showSemanticEdges = true;
+  bool _showManualLinks = true;
   String? _filterSourceId;
   String? _filterSubject;
   GraphSettings _settings = GraphSettings.defaults;
@@ -57,6 +58,19 @@ class _GraphScreenState extends State<GraphScreen> {
             onPressed: () {
               setState(() {
                 _showSemanticEdges = !_showSemanticEdges;
+              });
+            },
+          ),
+          IconButton(
+            icon: Icon(
+              _showManualLinks ? Icons.account_tree_rounded : Icons.account_tree_outlined,
+            ),
+            tooltip: _showManualLinks
+                ? 'Hide manual links'
+                : 'Show manual links',
+            onPressed: () {
+              setState(() {
+                _showManualLinks = !_showManualLinks;
               });
             },
           ),
@@ -268,6 +282,7 @@ class _GraphScreenState extends State<GraphScreen> {
                       graphData: graphData,
                       sources: sources,
                       settings: _settings,
+                      showManualLinks: _showManualLinks,
                       onNodeTap: (fact) {
                         Navigator.push(
                           context,

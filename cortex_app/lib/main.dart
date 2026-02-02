@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +6,7 @@ import 'providers/data_provider.dart';
 import 'services/storage_service.dart';
 import 'services/firebase_service.dart';
 import 'services/deep_link_service.dart';
+import 'services/automation_service.dart';
 import 'models/source.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_screen.dart';
@@ -79,18 +81,19 @@ class _CortexAppState extends State<CortexApp> {
           _showCaptureDialog(initialCapture);
         });
       } else {
-        // Store for after auth
+        // Store for after auth (memory only!)
         _pendingCapture = initialCapture;
-        await _savePendingCapture(initialCapture);
       }
-    } else {
-      // Check for pending capture from previous session
-      await _loadPendingCapture();
     }
     
     // If signed in, start Firebase listeners
     if (FirebaseService.isSignedIn) {
       _dataProvider.startFirebaseListeners();
+    }
+
+    // Automatic macOS Automation Setup (First run only)
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+      _setupMacosAutomation();
     }
     
     // Listen to future auth changes
@@ -104,7 +107,6 @@ class _CortexAppState extends State<CortexApp> {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _showCaptureDialog(_pendingCapture!);
             _pendingCapture = null;
-            _clearPendingCapture();
           });
         }
       } else {
@@ -115,15 +117,85 @@ class _CortexAppState extends State<CortexApp> {
     
     setState(() => _isInitializing = false);
   }
+
+  Future<void> _setupMacosAutomation() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isInstalled = prefs.getBool('macos_service_installed_v1') ?? false;
+
+    if (!isInstalled) {
+      debugPrint('Main: First launch on macOS. Running automatic service installation...');
+      // Run silently in background
+      final result = await AutomationService.installMacosService();
+      if (result.success) {
+        debugPrint('Main: Automatic service installation successful.');
+        await prefs.setBool('macos_service_installed_v1', true);
+      } else {
+        debugPrint('Main: Automatic service installation failed: ${result.error}');
+      }
+    }
+  }
   
   void _handleCaptureRequest(CaptureRequest request) {
     if (!mounted) return;
     
     if (FirebaseService.isSignedIn) {
-      _showCaptureDialog(request);
+      final activeSourceId = _dataProvider.activePdfSourceId;
+      final isPdfApp = request.suggestedType == SourceType.document || 
+                      _isPdfAppRequest(request);
+
+      if (activeSourceId != null && isPdfApp) {
+        // Strict auto-save for active PDF session
+        _autoSaveToActiveSession(request, activeSourceId);
+      } else {
+        _showCaptureDialog(request);
+      }
     } else {
       _pendingCapture = request;
-      _savePendingCapture(request);
+    }
+  }
+
+  bool _isPdfAppRequest(CaptureRequest request) {
+    // Check if the URL is empty (often true for PDF expert logs) 
+    // or if the suggests type is document
+    return request.sourceUrl == null || request.sourceUrl!.isEmpty;
+  }
+
+  Future<void> _autoSaveToActiveSession(CaptureRequest request, String sourceId) async {
+    try {
+      await _dataProvider.addFact(
+        content: request.text,
+        sourceId: sourceId,
+        url: request.sourceUrl,
+      );
+      
+      if (mounted) {
+        final context = _navigatorKey.currentContext;
+        if (context != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+                  const SizedBox(width: 12),
+                  const Expanded(child: Text('Fact captured to active PDF session')),
+                  TextButton(
+                    onPressed: () {
+                       // Optional: Open fact detail?
+                    },
+                    child: const Text('View', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error in auto-save: $e');
+      if (mounted) _showCaptureDialog(request);
     }
   }
   
@@ -136,51 +208,6 @@ class _CortexAppState extends State<CortexApp> {
     });
   }
   
-  Future<void> _savePendingCapture(CaptureRequest request) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('pending_capture_text', request.text);
-    if (request.sourceUrl != null) {
-      await prefs.setString('pending_capture_url', request.sourceUrl!);
-    }
-    if (request.sourceTitle != null) {
-      await prefs.setString('pending_capture_title', request.sourceTitle!);
-    }
-    await prefs.setString('pending_capture_type', request.suggestedType.name);
-  }
-  
-  Future<void> _loadPendingCapture() async {
-    final prefs = await SharedPreferences.getInstance();
-    final text = prefs.getString('pending_capture_text');
-    if (text != null && text.isNotEmpty && FirebaseService.isSignedIn) {
-      _pendingCapture = CaptureRequest(
-        text: text,
-        sourceUrl: prefs.getString('pending_capture_url'),
-        sourceTitle: prefs.getString('pending_capture_title'),
-        suggestedType: _parseSourceType(prefs.getString('pending_capture_type')),
-      );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showCaptureDialog(_pendingCapture!);
-        _pendingCapture = null;
-        _clearPendingCapture();
-      });
-    }
-  }
-  
-  SourceType _parseSourceType(String? name) {
-    if (name == null) return SourceType.other;
-    return SourceType.values.firstWhere(
-      (t) => t.name == name,
-      orElse: () => SourceType.other,
-    );
-  }
-  
-  Future<void> _clearPendingCapture() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('pending_capture_text');
-    await prefs.remove('pending_capture_url');
-    await prefs.remove('pending_capture_title');
-    await prefs.remove('pending_capture_type');
-  }
 
   void _toggleTheme() {
     setState(() {

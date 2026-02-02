@@ -14,6 +14,7 @@ class KnowledgeGraph extends StatefulWidget {
   final String? highlightedId;
   final Function(Fact)? onNodeTap;
   final bool showLabels;
+  final bool showManualLinks;
 
   const KnowledgeGraph({
     super.key,
@@ -23,6 +24,7 @@ class KnowledgeGraph extends StatefulWidget {
     this.highlightedId,
     this.onNodeTap,
     this.showLabels = true,
+    this.showManualLinks = true,
   });
 
   @override
@@ -136,6 +138,7 @@ class _KnowledgeGraphState extends State<KnowledgeGraph> {
                   isDark: isDark,
                   showLabels: widget.showLabels,
                   scale: _scale,
+                  showManualLinks: widget.showManualLinks,
                 ),
                 child: GestureDetector(
                   onTapUp: (details) {
@@ -333,6 +336,7 @@ class _GraphPainter extends CustomPainter {
   final bool isDark;
   final bool showLabels;
   final double scale;
+  final bool showManualLinks;
 
   _GraphPainter({
     required this.nodes,
@@ -344,12 +348,15 @@ class _GraphPainter extends CustomPainter {
     required this.isDark,
     required this.showLabels,
     required this.scale,
+    required this.showManualLinks,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     // Draw edges first (behind nodes)
     for (final edge in edges) {
+      if (edge.type == EdgeType.manual && !showManualLinks) continue;
+      
       final start = positions[edge.sourceId];
       final end = positions[edge.targetId];
       if (start == null || end == null) continue;
@@ -456,6 +463,7 @@ class _GraphPainter extends CustomPainter {
   bool shouldRepaint(covariant _GraphPainter oldDelegate) {
     return oldDelegate.positions != positions ||
            oldDelegate.highlightedId != highlightedId ||
-           oldDelegate.hoveredId != hoveredId;
+           oldDelegate.hoveredId != hoveredId ||
+           oldDelegate.showManualLinks != showManualLinks;
   }
 }

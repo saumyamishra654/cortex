@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/source.dart';
 import '../providers/data_provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 
 class AddSourceScreen extends StatefulWidget {
   final Source? source; // If provided, we are in edit mode
@@ -20,6 +22,9 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
   bool _isCluster = false;
   bool _isEditing = false;
   bool _isLoading = false;
+  String? _filePath;
+  List<String> _defaultTags = [];
+  final _tagController = TextEditingController();
 
   @override
   void initState() {
@@ -30,6 +35,8 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
       _urlController.text = widget.source!.url ?? '';
       _selectedType = widget.source!.type;
       _isCluster = widget.source!.isCluster;
+      _filePath = widget.source!.filePath;
+      _defaultTags = List<String>.from(widget.source!.defaultTags);
     }
   }
 
@@ -37,6 +44,7 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
   void dispose() {
     _nameController.dispose();
     _urlController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -97,7 +105,93 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
               ),
               keyboardType: TextInputType.url,
             ),
+            const SizedBox(height: 16),
+            
+            // File Path Selection
+            Text(
+              'PDF Source File',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _filePath != null 
+                              ? File(_filePath!).path.split('/').last 
+                              : 'No file selected',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: _filePath != null ? null : theme.colorScheme.outline,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: _pickFile,
+                        icon: const Icon(Icons.file_open_rounded, size: 18),
+                        label: const Text('Select PDF'),
+                      ),
+                    ],
+                  ),
+                  if (_filePath != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        _filePath!,
+                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                      ),
+                    ),
+                ],
+              ),
+            ),
             const SizedBox(height: 24),
+            
+            // Default Tags
+            Text(
+              'Default Tags',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            if (_defaultTags.isNotEmpty) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: _defaultTags.map((tag) => Chip(
+                  label: Text(tag),
+                  onDeleted: () => setState(() => _defaultTags.remove(tag)),
+                )).toList(),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _tagController,
+                    decoration: const InputDecoration(
+                      hintText: 'Add source-wide tag...',
+                      isDense: true,
+                    ),
+                    onSubmitted: _addTag,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline),
+                  onPressed: () => _addTag(_tagController.text),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
             Text(
               'Type',
               style: theme.textTheme.titleMedium,
@@ -174,6 +268,34 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
     }
   }
 
+  void _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _filePath = result.files.single.path;
+        // Auto-fill name if empty
+        if (_nameController.text.isEmpty) {
+          _nameController.text = result.files.single.name.replaceAll('.pdf', '');
+        }
+        // Auto-select type
+        _selectedType = SourceType.document;
+      });
+    }
+  }
+
+  void _addTag(String tag) {
+    final trimmed = tag.trim();
+    if (trimmed.isNotEmpty && !_defaultTags.contains(trimmed)) {
+      setState(() {
+        _defaultTags.add(trimmed);
+        _tagController.clear();
+      });
+    }
+  }
+
   void _submit() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -189,6 +311,8 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
         updatedSource.type = _selectedType;
         updatedSource.url = url;
         updatedSource.isCluster = _isCluster;
+        updatedSource.filePath = _filePath;
+        updatedSource.defaultTags = _defaultTags;
         updatedSource.updatedAt = DateTime.now();
         
         await provider.updateSource(updatedSource);
@@ -199,6 +323,8 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
           type: _selectedType,
           url: url,
           isCluster: _isCluster,
+          filePath: _filePath,
+          defaultTags: _defaultTags,
         );
       }
       

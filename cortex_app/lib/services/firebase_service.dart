@@ -108,6 +108,8 @@ class FirebaseService {
       'type': source.type.name,
       'url': source.url,
       'isCluster': source.isCluster,
+      'filePath': source.filePath,
+      'defaultTags': source.defaultTags,
       'metadata': metadata ?? {},
       'createdAt': Timestamp.fromDate(source.createdAt),
       'updatedAt': Timestamp.fromDate(source.updatedAt),
@@ -126,6 +128,8 @@ class FirebaseService {
       'type': source.type.name,
       'url': source.url,
       'isCluster': source.isCluster,
+      'filePath': source.filePath,
+      'defaultTags': source.defaultTags,
       'updatedAt': Timestamp.now(),
     };
 
@@ -251,6 +255,8 @@ class FirebaseService {
         'type': source.type.name,
         'url': source.url,
         'isCluster': source.isCluster,
+        'filePath': source.filePath,
+        'defaultTags': source.defaultTags,
         'metadata': {}, // Empty metadata for sources created in Flutter app
         'createdAt': Timestamp.fromDate(source.createdAt),
         'updatedAt': Timestamp.fromDate(source.updatedAt),
@@ -301,6 +307,8 @@ class FirebaseService {
         updatedAt: (data['updatedAt'] as Timestamp).toDate(),
         url: data['url'] as String?,
         isCluster: data['isCluster'] ?? false,
+        filePath: data['filePath'] as String?,
+        defaultTags: List<String>.from(data['defaultTags'] ?? []),
       );
       // Note: metadata field is ignored in Flutter app's Source model
     }).toList();
@@ -367,6 +375,8 @@ class FirebaseService {
               updatedAt: (data['updatedAt'] as Timestamp).toDate(),
               url: data['url'] as String?,
               isCluster: data['isCluster'] ?? false,
+              filePath: data['filePath'] as String?,
+              defaultTags: List<String>.from(data['defaultTags'] ?? []),
             );
             // Note: metadata field is ignored in Flutter app's Source model
           }).toList();

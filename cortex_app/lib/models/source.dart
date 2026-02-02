@@ -55,6 +55,12 @@ class Source extends HiveObject {
   @HiveField(6, defaultValue: false)
   bool isCluster;
 
+  @HiveField(7)
+  String? filePath;
+
+  @HiveField(8, defaultValue: [])
+  List<String> defaultTags;
+
   Source({
     required this.id,
     required this.name,
@@ -63,6 +69,8 @@ class Source extends HiveObject {
     required this.updatedAt,
     this.url,
     this.isCluster = false,
+    this.filePath,
+    this.defaultTags = const [],
   });
 
   /// Create a new source with auto-generated timestamps
@@ -72,6 +80,8 @@ class Source extends HiveObject {
     required SourceType type,
     String? url,
     bool isCluster = false,
+    String? filePath,
+    List<String>? defaultTags,
   }) {
     final now = DateTime.now();
     return Source(
@@ -82,6 +92,8 @@ class Source extends HiveObject {
       updatedAt: now,
       url: url,
       isCluster: isCluster,
+      filePath: filePath,
+      defaultTags: defaultTags ?? [],
     );
   }
 

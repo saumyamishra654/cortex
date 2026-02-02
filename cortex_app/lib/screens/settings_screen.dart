@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/fact.dart';
@@ -6,6 +7,7 @@ import '../providers/data_provider.dart';
 import '../services/secure_storage_service.dart';
 import '../services/firebase_service.dart';
 import '../services/embedding_service.dart';
+import '../services/automation_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -272,6 +274,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(height: 32),
 
+          const Divider(height: 32),
+          
+          // Automation Section (macOS only)
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) ...[
+            _SectionHeader(title: 'Automation & macOS Shortcuts'),
+            _AutomationSection(),
+            const Divider(height: 32),
+          ],
+          
           // About Section
           _SectionHeader(title: 'About'),
           ListTile(
@@ -759,6 +770,172 @@ class _ProviderTile extends StatelessWidget {
             else
               Icon(
                 Icons.radio_button_off,
+                color: theme.colorScheme.outline,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+class _AutomationSection extends StatefulWidget {
+  @override
+  State<_AutomationSection> createState() => _AutomationSectionState();
+}
+
+class _AutomationSectionState extends State<_AutomationSection> {
+  bool _isInstalling = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Enhance your workflow with system-wide shortcuts and automation.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.secondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Install Service
+          _AutomationTile(
+            title: 'Install "Save to Cortex" Service',
+            subtitle: 'Add a system-wide Right-Click service to capture text from any app.',
+            icon: Icons.install_desktop_rounded,
+            isLoading: _isInstalling,
+            onTap: _installService,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _installService() async {
+    setState(() => _isInstalling = true);
+    
+    final result = await AutomationService.installMacosService();
+    
+    if (mounted) {
+      setState(() => _isInstalling = false);
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(result.success ? 'Installation Successful' : 'Installation Failed'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (result.success)
+                   const Text('The service has been installed. You can now use "Save to Cortex" from the Services menu in other apps.')
+                else
+                   Text('Error: ${result.error ?? "Unknown error"}'),
+                
+                const SizedBox(height: 16),
+                const Text('Log:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: SelectableText(
+                    result.output,
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+}
+
+class _AutomationTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _AutomationTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    this.isLoading = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    return InkWell(
+      onTap: isLoading ? null : onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.colorScheme.outline.withValues(alpha: 0.3),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 20, color: theme.colorScheme.primary),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.secondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isLoading)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Icon(
+                Icons.chevron_right_rounded,
                 color: theme.colorScheme.outline,
               ),
           ],

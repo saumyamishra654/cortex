@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/source.dart';
 
 /// Represents a capture request from a deep link
@@ -64,22 +65,37 @@ class DeepLinkService {
   Stream<CaptureRequest> get captureStream => _captureController.stream;
   
   Future<CaptureRequest?> init() async {
+    final prefs = await SharedPreferences.getInstance();
+    
     // 1. ALWAYS start listening for subsequent links first
-    _subscription = _appLinks.uriLinkStream.listen((uri) {
+    _subscription = _appLinks.uriLinkStream.listen((uri) async {
       if (_isCaptureLink(uri)) {
         final request = CaptureRequest.fromUri(uri);
+        // Persist as handled
+        await prefs.setString('last_handled_link', uri.toString());
         _captureController.add(request);
       }
     });
 
-    // 2. Then check for initial link
+    // 2. Then check for initial link with deduplication
     try {
       final initialUri = await _appLinks.getInitialLink();
       if (initialUri != null && _isCaptureLink(initialUri)) {
+        final lastHandled = prefs.getString('last_handled_link');
+        final currentLink = initialUri.toString();
+        
+        // Skip if this link was already handled (likely OS cache)
+        if (lastHandled == currentLink) {
+          debugPrint('DeepLinkService: Skipping already handled initial link');
+          return null;
+        }
+        
+        // Persist as handled
+        await prefs.setString('last_handled_link', currentLink);
         return CaptureRequest.fromUri(initialUri);
       }
     } catch (e) {
-      rethrow;
+      debugPrint('DeepLinkService Error: $e');
     }
     
     return null;
