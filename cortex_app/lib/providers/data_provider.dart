@@ -27,11 +27,11 @@ class DataProvider extends ChangeNotifier {
   DateTime? _dueFactsCacheTime;
   
   bool _isLoading = true;
-  bool _isSyncing = false;
+  final bool _isSyncing = false;
 
-  // PDF Session Management
-  String? _activePdfSourceId;
-  String? get activePdfSourceId => _activePdfSourceId;
+  // Session Management (Universal)
+  String? _activeSourceId;
+  String? get activeSourceId => _activeSourceId;
 
   StreamSubscription? _sourcesSubscription;
   StreamSubscription? _factsSubscription;
@@ -290,19 +290,19 @@ class DataProvider extends ChangeNotifier {
     return _factsMap.values.where((f) => f.sourceId == sourceId).length;
   }
 
-  /// Start a PDF reading session for a source
-  void startPdfSession(String sourceId) {
-    if (_activePdfSourceId == sourceId) return;
-    _activePdfSourceId = sourceId;
-    debugPrint('PDF Session STARTED for source: $sourceId');
+  /// Set the active source for the session (Universal)
+  void setActiveSource(String sourceId) {
+    if (_activeSourceId == sourceId) return;
+    _activeSourceId = sourceId;
+    debugPrint('Active Source SET to: $sourceId');
     notifyListeners();
   }
 
-  /// Stop the current PDF reading session
-  void stopPdfSession() {
-    if (_activePdfSourceId != null) {
-      debugPrint('PDF Session STOPPED for source: $_activePdfSourceId');
-      _activePdfSourceId = null;
+  /// Clear the active source
+  void clearActiveSource() {
+    if (_activeSourceId != null) {
+      debugPrint('Active Source CLEARED (was: $_activeSourceId)');
+      _activeSourceId = null;
       notifyListeners();
     }
   }
@@ -359,6 +359,8 @@ class DataProvider extends ChangeNotifier {
     String? imageUrl,
     String? ocrText,
     String? url,
+    int? pageNumber,
+    String? quote,
   }) async {
     // If source exists, merge its default tags
     final source = _sourcesMap[sourceId];
@@ -374,6 +376,8 @@ class DataProvider extends ChangeNotifier {
       imageUrl: imageUrl,
       ocrText: ocrText,
       url: url,
+      pageNumber: pageNumber,
+      quote: quote,
     );
 
     // Save locally

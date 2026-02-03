@@ -18,10 +18,25 @@ import 'screens/auth_screen.dart';
 import 'screens/splash_screen.dart';
 import 'widgets/capture_dialog.dart';
 
-void main() {
+import 'dart:convert';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
+import 'package:window_manager/window_manager.dart' as window_manager;
+import 'screens/mini_mode_screen.dart';
+
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Run app immediately - initialization happens in background
-  runApp(const CortexApp());
+  
+  if (args.firstOrNull == 'multi_window') {
+    final windowId = args[1];
+    final arguments = args.length > 2 ? jsonDecode(args[2]) as Map<String, dynamic> : null;
+    runApp(MiniModeScreen(windowId: windowId, arguments: arguments));
+  } else {
+    // Initialize window_manager only for main window
+    if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.macOS || defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.linux)) {
+      await window_manager.windowManager.ensureInitialized();
+    }
+    runApp(const CortexApp());
+  }
 }
 
 class CortexApp extends StatefulWidget {
@@ -114,8 +129,74 @@ class _CortexAppState extends State<CortexApp> {
         _dataProvider.stopFirebaseListeners();
       }
     });
+
+    // Handle messages from Mini Mode window
+    WindowController.fromCurrentEngine().then((controller) {
+      controller.setWindowMethodHandler((call) async {
+        debugPrint('--- [MAIN APP] UI Handler: ${call.method} ---');
+        if (call.method == 'saveFact') {
+          final args = call.arguments as Map;
+          debugPrint('[MAIN APP] Saving fact from mini window. SourceID: ${args['sourceId']}');
+          try {
+            if (args['content'] == null || args['content'].toString().trim().isEmpty) {
+              debugPrint('[MAIN APP] Warning: Received empty content for fact');
+            }
+            
+            await _dataProvider.addFact(
+              content: args['content'] ?? 'Quick Note',
+              sourceId: args['sourceId'],
+              quote: args['quote'],
+              pageNumber: args['pageNumber'],
+              subjects: args['subjects'] != null ? List<String>.from(args['subjects']) : null,
+            );
+            debugPrint('[MAIN APP] Fact saved successfully via DataProvider');
+            return true; // Return success to mini window
+          } catch (e, stack) {
+            debugPrint('[MAIN APP] ERROR saving fact from mini window: $e');
+            debugPrint('[MAIN APP] Stacktrace: $stack');
+            return false;
+          }
+        }
+        return null;
+      });
+    });
     
+    // Listen to DataProvider active source changes to update Mini Window?
+    // DataProvider doesn't easily expose "listener" for specific field changes here without attaching a listener manualy.
+    // We can add a listener to _dataProvider.
+    _dataProvider.addListener(_syncActiveSourceToMiniWindow);
+
     setState(() => _isInitializing = false);
+  }
+
+  void _syncActiveSourceToMiniWindow() async {
+    final activeId = _dataProvider.activeSourceId;
+    if (activeId != null) {
+      final source = _dataProvider.getSourceById(activeId);
+      if (source != null) {
+        // Broadcast to all sub-windows
+        final windows = await WindowController.getAll();
+        for (final window in windows) {
+          if (window.windowId == '0') continue;
+          await window.invokeMethod('updateSource', {
+            'sourceId': activeId,
+            'sourceName': source.name,
+            'showQuoteOptions': source.filePath != null,
+          });
+        }
+      }
+    } else {
+      // Clear mini window source
+      final windows = await WindowController.getAll();
+      for (final window in windows) {
+        if (window.windowId == '0') continue;
+        await window.invokeMethod('updateSource', {
+          'sourceId': null,
+          'sourceName': null,
+          'showQuoteOptions': false,
+        });
+      }
+    }
   }
 
   Future<void> _setupMacosAutomation() async {
@@ -139,15 +220,37 @@ class _CortexAppState extends State<CortexApp> {
     if (!mounted) return;
     
     if (FirebaseService.isSignedIn) {
-      final activeSourceId = _dataProvider.activePdfSourceId;
-      final isPdfApp = request.suggestedType == SourceType.document || 
-                      _isPdfAppRequest(request);
+      final activeSourceId = _dataProvider.activeSourceId; // Updated to universal source ID
+      
+      // If silent is requested OR it allows auto-save
+      // We prioritize silent auto-save if an active session exists.
+      // Or if the request specifically targets the active source (future improvement).
+      
+      bool shouldAutoSave = false;
+      
+      if (activeSourceId != null) {
+        // If we have an active source, and the request is silent, we assume it's for this source.
+        // OR if it's a "pdf" type request (legacy logic).
+        final isPdfApp = request.suggestedType == SourceType.document || 
+                        _isPdfAppRequest(request);
+        
+        if (request.isSilent || isPdfApp) {
+          shouldAutoSave = true;
+        }
+      }
 
-      if (activeSourceId != null && isPdfApp) {
-        // Strict auto-save for active PDF session
+      if (shouldAutoSave && activeSourceId != null) {
         _autoSaveToActiveSession(request, activeSourceId);
       } else {
-        _showCaptureDialog(request);
+        if (request.isSilent) {
+           // Silent request but no active source to save to?
+           // For now, we unfortunately must show the dialog or fail.
+           // Let's show dialog but maybe minimal? 
+           // Standard behavior: Fallback to dialog.
+           _showCaptureDialog(request);
+        } else {
+           _showCaptureDialog(request);
+        }
       }
     } else {
       _pendingCapture = request;
@@ -163,39 +266,40 @@ class _CortexAppState extends State<CortexApp> {
   Future<void> _autoSaveToActiveSession(CaptureRequest request, String sourceId) async {
     try {
       await _dataProvider.addFact(
-        content: request.text,
+        content: request.text, // Text is now Thought
+        quote: request.quote,
+        pageNumber: request.pageNumber,
         sourceId: sourceId,
         url: request.sourceUrl,
       );
       
       if (mounted) {
-        final context = _navigatorKey.currentContext;
-        if (context != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                  const SizedBox(width: 12),
-                  const Expanded(child: Text('Fact captured to active PDF session')),
-                  TextButton(
-                    onPressed: () {
-                       // Optional: Open fact detail?
-                    },
-                    child: const Text('View', style: TextStyle(color: Colors.white)),
-                  ),
-                ],
+        // Only show snackbar if NOT silent? 
+        // User asked for "streaming... without app aggressively popping to front".
+        // Keep snackbar if window is visible, but don't force window focus (we can't control focus easily here anyway).
+        if (!request.isSilent) {
+          final context = _navigatorKey.currentContext;
+          if (context != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+                    const SizedBox(width: 12),
+                    const Expanded(child: Text('Fact captured to active session')),
+                  ],
+                ),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
               ),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              duration: const Duration(seconds: 3),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
+            );
+          }
         }
       }
     } catch (e) {
       debugPrint('Error in auto-save: $e');
-      if (mounted) _showCaptureDialog(request);
+      if (mounted && !request.isSilent) _showCaptureDialog(request);
     }
   }
   
@@ -203,6 +307,7 @@ class _CortexAppState extends State<CortexApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final context = _navigatorKey.currentContext;
       if (context != null) {
+        // We might want to pass the new fields to CaptureDialog too
         CaptureDialog.show(context, request);
       }
     });

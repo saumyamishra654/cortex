@@ -25,8 +25,10 @@ class CaptureDialog extends StatefulWidget {
 
 class _CaptureDialogState extends State<CaptureDialog> {
   late TextEditingController _contentController;
+  late TextEditingController _quoteController;
+  late TextEditingController _pageController;
   final _subjectController = TextEditingController();
-  List<String> _selectedSubjects = [];
+  final List<String> _selectedSubjects = [];
   String? _selectedSourceId;
   bool _createNewSource = false;
   late TextEditingController _newSourceNameController;
@@ -34,11 +36,20 @@ class _CaptureDialogState extends State<CaptureDialog> {
   late SourceType _newSourceType;
   bool _isSaving = false;
   bool _isCluster = false;
+  bool _showDetails = false;
   
   @override
   void initState() {
     super.initState();
     _contentController = TextEditingController(text: widget.request.text);
+    _quoteController = TextEditingController(text: widget.request.quote);
+    _pageController = TextEditingController(text: widget.request.pageNumber?.toString() ?? '');
+    
+    // Auto show details if quote or page is present
+    if (widget.request.quote != null || widget.request.pageNumber != null) {
+      _showDetails = true;
+    }
+    
     _newSourceNameController = TextEditingController(
       text: widget.request.sourceTitle ?? 'Quick Capture',
     );
@@ -57,66 +68,44 @@ class _CaptureDialogState extends State<CaptureDialog> {
       }
     });
   }
-  
+
   void _findMatchingSource() {
-    if (widget.request.sourceUrl == null || widget.request.sourceUrl!.isEmpty) {
-      setState(() => _createNewSource = true);
-      return;
-    }
-    
-    final provider = context.read<DataProvider>();
-    final requestUrl = widget.request.sourceUrl!;
-    debugPrint('CaptureDialog: Matching against URL: $requestUrl');
-    
-    // 1. Try exact exact Base URL match (or very close to it)
-    // 2. Try Longest Prefix Match among Cluster Sources
-    
-    Source? bestMatch;
-    int bestMatchLength = -1;
-    
-    for (final source in provider.sources) {
-      if (source.url == null || source.url!.isEmpty) continue;
-      
-      final sourceUrl = source.url!;
-      
-      if (source.isCluster) {
-        // For clusters, check if request starts with source URL
-        if (requestUrl.startsWith(sourceUrl)) {
-          if (sourceUrl.length > bestMatchLength) {
-            bestMatchLength = sourceUrl.length;
-            bestMatch = source;
-          }
-        }
-      } else {
-        if (requestUrl == sourceUrl) {
-           if (sourceUrl.length > bestMatchLength) {
-            bestMatchLength = sourceUrl.length;
-            bestMatch = source;
-          }
-        }
-      }
-    }
-    
-    // Fallback: If no match found, try the old "host match" logic 
-    // but only if we didn't find a cluster match
-    if (bestMatch == null) {
-      bestMatch = provider.sources.cast<Source?>().firstWhere(
-        (s) => s?.url != null && 
-               requestUrl.contains(Uri.parse(s!.url!).host),
+    if (widget.request.sourceUrl != null && widget.request.sourceUrl!.isNotEmpty) {
+      final provider = context.read<DataProvider>();
+      final existingSource = provider.sources.cast<Source?>().firstWhere(
+        (s) => s?.url == widget.request.sourceUrl || 
+               (s?.isCluster == true && widget.request.sourceUrl!.contains(s!.url ?? '')),
         orElse: () => null,
       );
-    }
-    
-    if (bestMatch != null) {
-      setState(() => _selectedSourceId = bestMatch!.id);
+      
+      if (existingSource != null) {
+        setState(() {
+          _selectedSourceId = existingSource.id;
+        });
+      } else {
+        setState(() => _createNewSource = true);
+      }
     } else {
       setState(() => _createNewSource = true);
+    }
+  }
+
+  // Add subject tag
+  void _addSubject(String value) {
+    final tag = value.trim();
+    if (tag.isNotEmpty && !_selectedSubjects.contains(tag)) {
+        setState(() {
+            _selectedSubjects.add(tag);
+            _subjectController.clear();
+        });
     }
   }
   
   @override
   void dispose() {
     _contentController.dispose();
+    _quoteController.dispose();
+    _pageController.dispose();
     _subjectController.dispose();
     _newSourceNameController.dispose();
     _sourceUrlController.dispose();
@@ -149,22 +138,72 @@ class _CaptureDialogState extends State<CaptureDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Content
+              // Content (Thought)
               TextField(
                 controller: _contentController,
-                maxLines: 5,
+                maxLines: 4,
                 decoration: const InputDecoration(
-                  labelText: 'Fact',
+                  labelText: 'Thought',
                   alignLabelWithHint: true,
                   border: OutlineInputBorder(),
+                  hintText: 'Your thought or note...',
                 ),
               ),
+              const SizedBox(height: 12),
+              
+              // Toggle for Details (Quote / Page)
+              InkWell(
+                onTap: () => setState(() => _showDetails = !_showDetails),
+                child: Row(
+                  children: [
+                    Icon(
+                      _showDetails ? Icons.arrow_drop_down_rounded : Icons.arrow_right_rounded,
+                      color: theme.colorScheme.secondary,
+                    ),
+                    Text(
+                      'Quote & Page Details',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              if (_showDetails) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _quoteController,
+                  maxLines: 3,
+                  style: const TextStyle(fontStyle: FontStyle.italic),
+                  decoration: const InputDecoration(
+                    labelText: 'Quote',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.format_quote_rounded, size: 20),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: 150,
+                  child: TextField(
+                    controller: _pageController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Page #',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               const SizedBox(height: 16),
               
               // Source selector
               if (!_createNewSource) ...[
                 DropdownButtonFormField<String>(
-                  value: _selectedSourceId,
+                  initialValue: _selectedSourceId,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Source',
@@ -235,9 +274,10 @@ class _CaptureDialogState extends State<CaptureDialog> {
                       _isCluster = !_isCluster;
                       // Auto-trim URL for clustering convenience
                       if (_isCluster && _sourceUrlController.text.isNotEmpty) {
-                        final uri = Uri.parse(_sourceUrlController.text);
-                        // Default to host + path without file extension?
-                        // For now just keep it as is, user can edit.
+                        try {
+                          // ignore: unused_local_variable
+                          final uri = Uri.parse(_sourceUrlController.text);
+                        } catch (_) {}
                       }
                     });
                   },
@@ -339,26 +379,26 @@ class _CaptureDialogState extends State<CaptureDialog> {
                       Icon(Icons.link, size: 16, color: theme.colorScheme.primary),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Captured from:',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                fontSize: 10,
-                                color: theme.colorScheme.outline,
-                              ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Captured from:',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontSize: 10,
+                              color: theme.colorScheme.outline,
                             ),
-                            Text(
-                              widget.request.sourceUrl!,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface,
-                              ),
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            widget.request.sourceUrl!,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface,
                             ),
-                          ],
-                        ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                       ),
                     ],
                   ),
@@ -388,19 +428,19 @@ class _CaptureDialogState extends State<CaptureDialog> {
       ),
     );
   }
-  
-  void _addSubject(String subject) {
-    final trimmed = subject.trim();
-    if (trimmed.isNotEmpty && !_selectedSubjects.contains(trimmed)) {
-      setState(() {
-        _selectedSubjects.add(trimmed);
-        _subjectController.clear();
-      });
-    }
-  }
-  
+
   Future<void> _save() async {
-    if (_contentController.text.trim().isEmpty) return;
+    // Content shouldn't be empty, but if quote is present, allow content to be default or just "Quote"
+    String finalContent = _contentController.text.trim();
+    final String? finalQuote = _quoteController.text.trim().isNotEmpty ? _quoteController.text.trim() : null;
+    
+    if (finalContent.isEmpty) {
+      if (finalQuote != null) {
+        finalContent = 'Quote'; // Default title/thought
+      } else {
+        return; // Nothing to save
+      }
+    }
     
     setState(() => _isSaving = true);
     
@@ -424,10 +464,12 @@ class _CaptureDialogState extends State<CaptureDialog> {
     
     // Save the fact
     await provider.addFact(
-      content: _contentController.text.trim(),
+      content: finalContent,
       sourceId: sourceId,
+      quote: finalQuote,
+      pageNumber: int.tryParse(_pageController.text.trim()),
       subjects: _selectedSubjects.isNotEmpty ? _selectedSubjects : null,
-      url: widget.request.sourceUrl, // Capture the specific page URL
+      url: widget.request.sourceUrl, 
     );
     
     if (mounted) {

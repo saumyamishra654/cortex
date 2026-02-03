@@ -4,11 +4,15 @@ import '../models/source.dart';
 import '../providers/data_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class AddSourceScreen extends StatefulWidget {
   final Source? source; // If provided, we are in edit mode
+  final SourceType? initialType;
   
-  const AddSourceScreen({super.key, this.source});
+  const AddSourceScreen({super.key, this.source, this.initialType});
 
   @override
   State<AddSourceScreen> createState() => _AddSourceScreenState();
@@ -25,6 +29,10 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
   String? _filePath;
   List<String> _defaultTags = [];
   final _tagController = TextEditingController();
+  Timer? _urlDebounce;
+  bool _isFetchingTitle = false;
+  String? _lastAutoFilledTitle;
+  String? _lastAutoFilledUrl;
 
   @override
   void initState() {
@@ -37,15 +45,79 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
       _isCluster = widget.source!.isCluster;
       _filePath = widget.source!.filePath;
       _defaultTags = List<String>.from(widget.source!.defaultTags);
+    } else if (widget.initialType != null) {
+      _selectedType = widget.initialType!;
     }
+
+    _urlController.addListener(_onUrlChanged);
   }
 
   @override
   void dispose() {
+    _urlDebounce?.cancel();
+    _urlController.removeListener(_onUrlChanged);
     _nameController.dispose();
     _urlController.dispose();
     _tagController.dispose();
     super.dispose();
+  }
+
+  void _onUrlChanged() {
+    final url = _urlController.text.trim();
+    if (url.isEmpty) return;
+    if (_lastAutoFilledUrl == url) return;
+
+    final currentName = _nameController.text.trim();
+    final canAutoFill = currentName.isEmpty || currentName == _lastAutoFilledTitle;
+    if (!canAutoFill) return;
+
+    _urlDebounce?.cancel();
+    _urlDebounce = Timer(const Duration(milliseconds: 600), () {
+      _tryAutoFillTitleFromUrl(url);
+    });
+  }
+
+  bool _isYouTubeUrl(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return false;
+    final host = uri.host.toLowerCase();
+    return host.contains('youtube.com') || host.contains('youtu.be');
+  }
+
+  Future<void> _tryAutoFillTitleFromUrl(String url) async {
+    if (_isFetchingTitle) return;
+    if (!_isYouTubeUrl(url)) return;
+
+    setState(() => _isFetchingTitle = true);
+    try {
+      final oembedUrl = Uri.parse(
+        'https://www.youtube.com/oembed?url=${Uri.encodeComponent(url)}&format=json',
+      );
+      final response = await http.get(oembedUrl);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final title = data['title']?.toString().trim();
+        final channel = data['author_name']?.toString().trim();
+        final formattedTitle = [title, channel]
+          .whereType<String>()
+          .where((v) => v.isNotEmpty)
+          .join(' - ');
+        if (formattedTitle.isNotEmpty && mounted) {
+          setState(() {
+            _nameController.text = formattedTitle;
+            _lastAutoFilledTitle = formattedTitle;
+            _lastAutoFilledUrl = url;
+            if (_selectedType == SourceType.other) {
+              _selectedType = SourceType.video;
+            }
+          });
+        }
+      }
+    } catch (_) {
+      // Ignore auto-fill errors
+    } finally {
+      if (mounted) setState(() => _isFetchingTitle = false);
+    }
   }
 
   @override
@@ -65,7 +137,7 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
               controller: _nameController,
               decoration: const InputDecoration(
                 labelText: 'Source Name',
-                hintText: 'e.g., Atomic Habits, Huberman Lab',
+                hintText: 'enter title here',
                 border: OutlineInputBorder(),
               ),
               validator: (value) {
@@ -97,6 +169,16 @@ class _AddSourceScreenState extends State<AddSourceScreen> {
                 labelText: _isCluster ? 'Base URL Pattern' : 'Link (Optional)',
                 hintText: _isCluster ? 'https://example.com/blog/' : 'https://...',
                 prefixIcon: const Icon(Icons.link),
+                suffixIcon: _isFetchingTitle
+                    ? const Padding(
+                        padding: EdgeInsets.all(12.0),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null,
                 border: const OutlineInputBorder(),
                 helperText: _isCluster 
                     ? 'Captures starting with this URL will be automatically added to this source.' 

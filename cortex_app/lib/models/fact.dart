@@ -49,6 +49,12 @@ class Fact extends HiveObject {
   @HiveField(13)
   String? url;
 
+  @HiveField(14)
+  final int? pageNumber;
+
+  @HiveField(15)
+  final String? quote;
+
   Fact({
     required this.id,
     required this.content,
@@ -64,6 +70,8 @@ class Fact extends HiveObject {
     this.nextReviewAt,
     this.embedding,
     this.url,
+    this.pageNumber,
+    this.quote,
   });
 
   /// Create a new fact with defaults
@@ -75,6 +83,8 @@ class Fact extends HiveObject {
     String? imageUrl,
     String? ocrText,
     String? url,
+    int? pageNumber,
+    String? quote,
   }) {
     final now = DateTime.now();
     return Fact(
@@ -91,6 +101,8 @@ class Fact extends HiveObject {
       interval: 0,
       nextReviewAt: now, // Due immediately
       url: url,
+      pageNumber: pageNumber,
+      quote: quote,
     );
   }
 

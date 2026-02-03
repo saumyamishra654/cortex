@@ -6,29 +6,42 @@ import '../models/source.dart';
 
 /// Represents a capture request from a deep link
 class CaptureRequest {
-  final String text;
+  final String text; // Represents 'thought' or 'content'
+  final String? quote; 
   final String? sourceUrl;
   final String? sourceTitle;
   final SourceType suggestedType;
+  final int? pageNumber;
+  final bool isSilent;
   
   CaptureRequest({
     required this.text,
+    this.quote,
     this.sourceUrl,
     this.sourceTitle,
     this.suggestedType = SourceType.other,
+    this.pageNumber,
+    this.isSilent = false,
   });
   
   factory CaptureRequest.fromUri(Uri uri) {
-    final text = uri.queryParameters['text'] ?? '';
+    // We accept 'thought' or 'text' as the main content
+    final text = uri.queryParameters['thought'] ?? uri.queryParameters['text'] ?? '';
+    final quote = uri.queryParameters['quote'];
     final sourceUrl = uri.queryParameters['url'];
     final sourceTitle = uri.queryParameters['title'];
     final typeStr = uri.queryParameters['type'] ?? 'other';
+    final pageNumber = int.tryParse(uri.queryParameters['page'] ?? '');
+    final isSilent = uri.queryParameters['silent']?.toLowerCase() == 'true';
     
     return CaptureRequest(
       text: text,
+      quote: quote,
       sourceUrl: sourceUrl,
       sourceTitle: sourceTitle,
       suggestedType: _parseSourceType(typeStr),
+      pageNumber: pageNumber,
+      isSilent: isSilent,
     );
   }
   
@@ -47,6 +60,13 @@ class CaptureRequest {
         return SourceType.social_post;
       case 'reels':
         return SourceType.reels;
+      case 'conversation':
+        return SourceType.conversation;
+      case 'pdf':
+      case 'document':
+        return SourceType.document;
+      case 'course':
+        return SourceType.course;
       default:
         return SourceType.other;
     }

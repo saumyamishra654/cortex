@@ -45,6 +45,8 @@ dependencies:
   app_links: ^6.0.0
   file_picker: ^8.1.7
   desktop_drop: ^0.5.0
+  window_manager: ^0.5.1
+  desktop_multi_window: ^0.3.0
 
 dev_dependencies:
   flutter_test:
