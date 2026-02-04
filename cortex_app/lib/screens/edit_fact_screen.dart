@@ -63,7 +63,7 @@ class _EditFactScreenState extends State<EditFactScreen> {
             Text('Source', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _selectedSourceId,
+              initialValue: _selectedSourceId,
               isExpanded: true,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: provider.sources.map((source) {

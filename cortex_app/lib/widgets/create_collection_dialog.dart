@@ -135,7 +135,7 @@ class _CreateCollectionDialogState extends State<CreateCollectionDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<SortField>(
-                      value: _sortField,
+                      initialValue: _sortField,
                       decoration: const InputDecoration(
                         labelText: 'Sort By',
                         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),

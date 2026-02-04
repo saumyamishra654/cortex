@@ -36,6 +36,7 @@ CHROME_EXTENSION_PLAN.md
 
 # Local Netlify folder
 .netlify
+case_study/
 
 # Agent
 .agent/

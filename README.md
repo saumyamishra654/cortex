@@ -4,8 +4,11 @@ A personal knowledge collection app with spaced repetition and knowledge graph f
 
 ## Features
 
-- Source Management (books, podcasts, articles)
+- Source Management (books, podcasts, articles, PDFs)
 - Fact Capture with subject tags
+- PDF Reader Sessions (Strict auto-routing for PDF Expert/Preview)
+- Source-wide default tags
+- Drag-and-drop file import
 - Spaced Repetition (SM-2 algorithm)
 - Knowledge Graph visualization
 - Smart Collections
@@ -26,18 +29,20 @@ A personal knowledge collection app with spaced repetition and knowledge graph f
 Cortex supports capturing text from any application on macOS.
 
 ### Setup
-For the best experience, we recommend installing the "Save to Cortex" macOS Service:
+Cortex is designed for macOS with deep system integration:
 
-1. **Automated Setup**:
+1. **Automatic Setup**: On first launch, Cortex will attempt to install the "Save to Cortex" service automatically.
+2. **Manual Installation**: If needed, you can re-run the setup from the Settings screen or via the terminal:
    ```bash
    chmod +x scripts/setup_cortex_service.sh
    ./scripts/setup_cortex_service.sh
    ```
-2. **Manual Setup / Help**: See [docs/macos_capture_shortcut.md](file:///Users/saumyamishra/Desktop/Projects/cortex/docs/macos_capture_shortcut.md).
+3. **Help**: See [docs/macos_capture_shortcut.md](file:///Users/saumyamishra/Desktop/Projects/cortex/docs/macos_capture_shortcut.md) for manual configuration details.
 
-### Features
-- Capture text from browsers (Chrome, Safari, Arc) with automatic URL context.
-- Capture file paths from Finder or Preview.
-- Spawns the capture dialog instantly without leaving your active app.
+### Advanced Features
+- **Neon Neural Interface**: A premium, modern look with a custom-designed app icon.
+- **Universal Capture**: Capture text from browsers (Chrome, Safari, Arc) with automatic URL preservation.
+- **PDF Reader Sessions**: Active sessions automatically route captures from PDF Expert or Preview.
+- **Drag-and-Drop**: Drop PDFs onto the Home screen to instant-open/create sources.
 
 See [CHANGELOG.md](file:///Users/saumyamishra/Desktop/Projects/cortex/CHANGELOG.md) for recent updates.

@@ -5,7 +5,6 @@ import '../models/source.dart';
 import '../models/fact.dart';
 import 'source_detail_screen.dart';
 import 'fact_detail_screen.dart'; // Assuming this exists or will be used for facts
-import 'package:intl/intl.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});

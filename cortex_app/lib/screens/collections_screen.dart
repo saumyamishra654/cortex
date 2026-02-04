@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/smart_collection.dart';
-import '../models/source.dart';
 
 import '../providers/data_provider.dart';
 import '../services/collection_service.dart';

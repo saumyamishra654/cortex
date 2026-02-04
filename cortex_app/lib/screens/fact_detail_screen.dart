@@ -238,8 +238,9 @@ class _FactDetailScreenState extends State<FactDetailScreen> {
   }
 
   String _getSimilarityDescription(double similarity) {
-    if (similarity >= 0.9)
+    if (similarity >= 0.9) {
       return 'Extremely similar - nearly identical concepts';
+    }
     if (similarity >= 0.75) return 'Very similar - strong semantic connection';
     if (similarity >= 0.6) return 'Moderately similar - related topics';
     if (similarity >= 0.4) return 'Somewhat similar - loose connection';

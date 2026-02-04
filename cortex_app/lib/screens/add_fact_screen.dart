@@ -16,7 +16,7 @@ class _AddFactScreenState extends State<AddFactScreen> {
   final _formKey = GlobalKey<FormState>();
   final _contentController = TextEditingController();
   final _subjectController = TextEditingController();
-  List<String> _selectedSubjects = [];
+  final List<String> _selectedSubjects = [];
 
   @override
   void dispose() {
